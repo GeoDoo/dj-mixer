@@ -1,118 +1,249 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>dj-mixer</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0d0d0d;color:#fff;font:12px/1.4 monospace;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.mixer{display:flex;gap:0;background:#161616;border-radius:12px;padding:20px;border:1px solid #2a2a2a}
-.deck{background:#1c1c1c;border-radius:8px;padding:14px;width:340px;display:flex;flex-direction:column;gap:8px}
-.deck h2{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:2px}
-.deck h2 .badge{color:#ff6600;margin-left:6px}
-canvas{display:block;width:100%;height:60px;border-radius:4px;background:#111;cursor:pointer}
+:root {
+  --bg: oklch(0.06 0.000 0);
+  --surface: oklch(0.10 0.005 270);
+  --surface-2: oklch(0.14 0.008 270);
+  --deck-bg: oklch(0.09 0.006 270);
+  --primary: oklch(0.45 0.18 270);
+  --accent: oklch(0.65 0.15 70);
+  --accent-glow: oklch(0.72 0.18 70);
+  --ink: oklch(0.92 0.005 270);
+  --muted: oklch(0.45 0.01 270);
+  --border: oklch(0.18 0.01 270);
+  --focus: oklch(0.50 0.18 270);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px}
+body{
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg);color:var(--ink);
+  display:flex;justify-content:center;align-items:center;
+  min-height:100vh;margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+.mixer{
+  display:flex;align-items:stretch;gap:0;
+  background:var(--surface);
+  border-radius:14px;
+  padding:24px;
+  border:1px solid var(--border);
+  box-shadow:0 0 60px oklch(0.45 0.18 270 / 0.06),0 20px 60px rgba(0,0,0,0.5);
+}
+.deck{
+  background:var(--deck-bg);
+  border-radius:10px;
+  padding:18px;
+  width:320px;
+  display:flex;flex-direction:column;gap:10px;
+  border:1px solid var(--border);
+  position:relative;
+}
+.deck:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+.deck-header{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:10px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);
+}
+.deck-header .kbd{
+  background:var(--surface-2);padding:2px 6px;border-radius:3px;font-size:9px;color:var(--muted);
+}
+canvas{display:block;width:100%;height:72px;border-radius:6px;background:oklch(0.04 0 0);cursor:pointer;border:1px solid var(--border)}
 .controls{display:flex;gap:6px}
-.controls .btn,.controls .btn-sm{background:#2a2a2a;border:1px solid #333;color:#fff;padding:6px 12px;border-radius:5px;cursor:pointer;font:inherit;text-align:center}
-.controls .btn-sm{padding:4px 8px;font-size:11px}
-.controls .btn:hover,.controls .btn-sm:hover{background:#333}
-.controls .btn.active{background:#ff6600;border-color:#ff6600}
-.controls .btn.on{background:#335533;border-color:#448844}
-input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%}
-input[type=range]::-webkit-slider-runnable-track{height:3px;background:#333;border-radius:2px}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:14px;width:14px;border-radius:50%;background:#ff6600;margin-top:-5px;cursor:pointer}
-input[type=range]::-moz-range-track{height:3px;background:#333;border-radius:2px}
-input[type=range]::-moz-range-thumb{height:14px;width:14px;border-radius:50%;background:#ff6600;border:none;cursor:pointer}
-.row{display:flex;gap:8px;align-items:center}
-.row .btn-sm{flex-shrink:0}
-.crossfader-section{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 14px;gap:4px}
-.crossfader-section label{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px}
-.crossfader-section input[type=range]{width:100px;transform:rotate(-90deg);margin:36px 0}
-.deck input[type=range]{width:100%}
-.file-label{display:block;background:#1c1c1c;border:1px dashed #333;border-radius:5px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.file-label:hover{border-color:#ff6600;color:#aaa}
+.ctrl-btn,.ctrl-btn-sm{
+  background:var(--surface-2);border:1px solid var(--border);
+  color:var(--muted);padding:6px 14px;border-radius:5px;cursor:pointer;font:inherit;font-size:12px;
+  transition:background 0.15s,color 0.15s,border-color 0.15s;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  -webkit-tap-highlight-color:transparent;
+}
+.ctrl-btn:hover,.ctrl-btn-sm:hover{background:var(--surface);border-color:var(--accent);color:var(--ink)}
+.ctrl-btn.on{background:oklch(0.20 0.06 70 / 0.3);border-color:var(--accent);color:var(--accent)}
+.ctrl-btn-sm{padding:4px 10px;font-size:11px}
+
+/* knobs */
+.knob-row{display:flex;gap:12px;justify-content:center;padding:4px 0}
+.knob-group{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+.knob-group label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.knob{
+  width:36px;height:36px;border-radius:50%;
+  background:radial-gradient(circle at 36% 32%,oklch(0.25 0.02 270),oklch(0.12 0.01 270));
+  border:1px solid var(--border);
+  cursor:pointer;position:relative;
+  -webkit-tap-highlight-color:transparent;
+  transition:border-color 0.15s,box-shadow 0.15s;
+}
+.knob:hover{border-color:var(--accent)}
+.knob::after{
+  content:'';position:absolute;top:4px;left:50%;
+  width:3px;height:12px;border-radius:2px;
+  background:var(--muted);transform:translateX(-50%);
+  transition:background 0.15s;
+}
+.knob.active::after{background:var(--accent)}
+.knob-wrap{width:36px;height:36px;cursor:pointer}
+
+/* crossfader */
+.crossfader-section{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:0 12px;gap:4px;min-width:64px;
+}
+.crossfader-section label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.fader-track{
+  position:relative;width:6px;height:180px;
+  background:linear-gradient(180deg,var(--border),oklch(0.12 0.01 270),var(--border));
+  border-radius:3px;cursor:pointer;
+}
+.fader-track::before,.fader-track::after{
+  content:'';position:absolute;left:50%;transform:translateX(-50%);
+  width:14px;height:10px;border-radius:50%;border:1px solid var(--border);background:var(--deck-bg);
+}
+.fader-track::before{top:-5px}
+.fader-track::after{bottom:-5px}
+.fader-knob{
+  position:absolute;left:50%;transform:translateX(-50%);
+  width:20px;height:10px;border-radius:2px;
+  background:linear-gradient(180deg,oklch(0.30 0.02 270),oklch(0.18 0.01 270));
+  border:1px solid var(--muted);cursor:grab;z-index:2;
+  transition:border-color 0.15s,box-shadow 0.15s;
+}
+.fader-knob:hover{border-color:var(--accent);box-shadow:0 0 8px oklch(0.65 0.15 70 / 0.3)}
+.fader-knob::after{
+  content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:6px;height:2px;border-radius:1px;background:var(--muted);
+}
+
+.sub{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-label{
+  display:block;background:var(--deck-bg);
+  border:1px dashed var(--border);border-radius:5px;
+  padding:6px 10px;text-align:center;cursor:pointer;
+  font-size:11px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  transition:border-color 0.15s,color 0.15s;
+}
+.file-label:hover{border-color:var(--accent);color:var(--ink)}
 input[type=file]{display:none}
-.sub{font-size:10px;color:#555;text-align:center;margin-top:4px}
-.kbd{color:#888;font-size:10px}
-.vol-label{display:flex;justify-content:space-between;font-size:10px;color:#555}
+
+/* hidden range inputs for knob dragging */
+.knob-input{display:none}
 </style>
 </head>
 <body>
 <div class="mixer">
   <div class="deck" id="deck-a">
-    <h2>Deck A <span class="badge">[1]</span></h2>
-    <label class="file-label" id="label-a">⏏ Load Track</label>
+    <div class="deck-header"><span>Deck A</span><span class="kbd">1</span></div>
+    <label class="file-label" id="label-a">Load Track</label>
     <input type="file" id="file-a" accept="audio/*">
-    <canvas id="wave-a" height="60"></canvas>
+    <canvas id="wave-a" height="72"></canvas>
     <div class="controls">
-      <button class="btn" id="play-a">▶</button>
-      <button class="btn-sm" id="cue-a">Cue</button>
-      <button class="btn-sm" id="loop-a">⟳</button>
+      <button class="ctrl-btn" id="play-a" title="Play/Pause [Space]">▶</button>
+      <button class="ctrl-btn-sm" id="cue-a" title="Set Cue Point">Cue</button>
+      <button class="ctrl-btn-sm" id="loop-a" title="Loop">⟳</button>
     </div>
-    <div class="vol-label"><span>A volume</span><span id="vol-num-a">100%</span></div>
-    <input type="range" id="vol-a" min="0" max="1" step="0.01" value="1">
-    <div class="sub" id="info-a">—</div>
+    <div class="knob-row">
+      <div class="knob-group">
+        <label>A Vol</label>
+        <div class="knob-wrap" data-deck="a" data-param="vol">
+          <div class="knob" id="knob-a"></div>
+        </div>
+      </div>
+    </div>
+    <div class="sub" id="info-a">Load a track to begin</div>
   </div>
   <div class="crossfader-section">
     <label>A</label>
-    <input type="range" id="crossfader" min="0" max="1" step="0.01" value="0.5">
+    <div class="fader-track" id="fader-track">
+      <div class="fader-knob" id="fader-knob"></div>
+    </div>
     <label>B</label>
   </div>
   <div class="deck" id="deck-b">
-    <h2>Deck B <span class="badge">[2]</span></h2>
-    <label class="file-label" id="label-b">⏏ Load Track</label>
+    <div class="deck-header"><span>Deck B</span><span class="kbd">2</span></div>
+    <label class="file-label" id="label-b">Load Track</label>
     <input type="file" id="file-b" accept="audio/*">
-    <canvas id="wave-b" height="60"></canvas>
+    <canvas id="wave-b" height="72"></canvas>
     <div class="controls">
-      <button class="btn" id="play-b">▶</button>
-      <button class="btn-sm" id="cue-b">Cue</button>
-      <button class="btn-sm" id="loop-b">⟳</button>
+      <button class="ctrl-btn" id="play-b" title="Play/Pause [Space]">▶</button>
+      <button class="ctrl-btn-sm" id="cue-b" title="Set Cue Point">Cue</button>
+      <button class="ctrl-btn-sm" id="loop-b" title="Loop">⟳</button>
     </div>
-    <div class="vol-label"><span>B volume</span><span id="vol-num-b">100%</span></div>
-    <input type="range" id="vol-b" min="0" max="1" step="0.01" value="1">
-    <div class="sub" id="info-b">—</div>
+    <div class="knob-row">
+      <div class="knob-group">
+        <label>B Vol</label>
+        <div class="knob-wrap" data-deck="b" data-param="vol">
+          <div class="knob" id="knob-b"></div>
+        </div>
+      </div>
+    </div>
+    <div class="sub" id="info-b">Load a track to begin</div>
   </div>
 </div>
 <script>
 const ctx = new (window.AudioContext || window.webkitAudioContext)();
 
-function makeDeck(id, canvasId) {
-  let src=null, buf=null, gain=ctx.createGain(), playing=false, startTime=0, pausePos=0, loop=false;
-  let cuePoint=0, cueSet=false;
+/* knob: convert value (0-1) to rotation (-135 to 135 deg) */
+function knobRot(v){return -135+v*270}
+/* render all knobs from stored values */
+function updateKnobs(){
+  document.querySelectorAll('.knob').forEach(k=>{
+    const deck=k.id.replace('knob-','');
+    const val=vols[deck];
+    k.style.transform=`rotate(${knobRot(val)}deg)`;
+    if(val>0)k.classList.add('active');else k.classList.remove('active');
+  });
+}
+
+const vols={a:1,b:1};
+let xfPos=0.5;
+
+function makeDeck(id,canvasId){
+  let src=null,buf=null,gain=ctx.createGain(),playing=false,startTime=0,pausePos=0,loop=false;
+  let cuePoint=0,cueSet=false;
   gain.connect(ctx.destination);
   const playBtn=document.getElementById('play-'+id);
   const cueBtn=document.getElementById('cue-'+id);
   const loopBtn=document.getElementById('loop-'+id);
-  const volSlider=document.getElementById('vol-'+id);
-  const volNum=document.getElementById('vol-num-'+id);
   const info=document.getElementById('info-'+id);
   const fi=document.getElementById('file-'+id);
   const lb=document.getElementById('label-'+id);
   const canvas=document.getElementById('wave-'+id);
   const cctx=canvas.getContext('2d');
 
-  let animId=null;
-  function drawWave() {
-    const w=canvas.width=canvas.clientWidth, h=canvas.height;
-    cctx.fillStyle='#111';cctx.fillRect(0,0,w,h);
-    if(!buf){cctx.fillStyle='#222';cctx.font='10px monospace';cctx.fillText('load a track',8,h/2+4);return}
+  function drawWave(){
+    const dpr=devicePixelRatio||1;
+    const cw=canvas.clientWidth,ch=canvas.clientHeight||72;
+    canvas.width=cw*dpr;canvas.height=ch*dpr;
+    const w=cw*dpr,h=ch*dpr;
+    cctx.fillStyle='oklch(0.04 0 0)';cctx.fillRect(0,0,w,h);
+    if(!buf){
+      cctx.fillStyle='oklch(0.18 0.01 270)';
+      cctx.font=Math.round(11*dpr)+'px system-ui';
+      cctx.fillText('load a track',10*dpr,h/2+4*dpr);
+      return;
+    }
     const len=buf.getChannelData(0);
     const step=Math.floor(len.length/w);
-    cctx.fillStyle='#ff6600';
     for(let i=0;i<w;i++){
       let peak=0;const end=Math.min((i+1)*step,len.length);
       for(let j=i*step;j<end;j++){const a=Math.abs(len[j]);if(a>peak)peak=a}
-      cctx.fillRect(i,h-4-peak*h*0.45,1,Math.max(4,peak*h*0.45));
+      const amp=Math.min(1,peak*2);
+      cctx.fillStyle=amp>0.6?'oklch(0.65 0.15 70)':'oklch(0.50 0.18 270)';
+      cctx.fillRect(i,h/2-peak*(h/2-4)*0.9,1,Math.max(2,peak*(h-8)*0.9));
     }
-    // position marker
     if(playing||pausePos>0){
       const pct=pausePos/(buf.duration||1);
       const mx=pct*w;
-      cctx.strokeStyle='#fff';cctx.beginPath();cctx.moveTo(mx,0);cctx.lineTo(mx,h);cctx.stroke();
+      cctx.strokeStyle='oklch(0.92 0.005 270 / 0.7)';
+      cctx.lineWidth=Math.max(1,dpr);cctx.beginPath();cctx.moveTo(mx,0);cctx.lineTo(mx,h);cctx.stroke();
     }
     if(cueSet){
       const cx=cuePoint/buf.duration*w;
-      cctx.fillStyle='#0f0';cctx.fillRect(cx-1,h-8,3,8);
+      cctx.fillStyle='oklch(0.65 0.15 70)';cctx.fillRect(cx-1*dpr,h-12*dpr,2*dpr,12*dpr);
     }
   }
 
@@ -122,12 +253,12 @@ function makeDeck(id, canvasId) {
     src=ctx.createBufferSource();
     src.buffer=buf;src.loop=loop;src.connect(gain);
     src.start(0,pos);startTime=ctx.currentTime;pausePos=pos;playing=true;
-    playBtn.textContent='❚❚';playBtn.classList.add('on');
-    ctx.resume();
+    playBtn.textContent='❚❚';playBtn.classList.add('on');ctx.resume();
   }
-
-  function stopPlay(){if(src)try{src.stop()}catch(e){};playing=false;playBtn.textContent='▶';playBtn.classList.remove('on');}
-
+  function stopPlay(){
+    if(src)try{src.stop()}catch(e){}
+    playing=false;playBtn.textContent='▶';playBtn.classList.remove('on');
+  }
   function togglePlay(){
     if(!buf)return;
     if(playing){stopPlay();pausePos+=ctx.currentTime-startTime;}
@@ -139,10 +270,11 @@ function makeDeck(id, canvasId) {
     stopPlay();pausePos=0;cuePoint=0;cueSet=false;cueBtn.classList.remove('active');
     const r=new FileReader();
     r.onload=e=>{
-      ctx.decodeAudioData(e.target.result, b=>{
+      ctx.decodeAudioData(e.target.result,b=>{
         buf=b;pausePos=0;
         lb.textContent=f.name;
-        info.textContent=formatTime(b.duration)+' · '+(b.sampleRate/1000).toFixed(1)+'kHz';
+        const m=Math.floor(b.duration/60),s=Math.floor(b.duration%60);
+        info.textContent=m+':'+String(s).padStart(2,'0')+' · '+(b.sampleRate/1000).toFixed(1)+'kHz';
         drawWave();
       });
     };
@@ -151,15 +283,13 @@ function makeDeck(id, canvasId) {
   playBtn.onclick=togglePlay;
   cueBtn.onclick=()=>{
     if(!buf)return;
-    if(playing){cuePoint=pausePos+ctx.currentTime-startTime;}
+    if(playing)cuePoint=pausePos+ctx.currentTime-startTime;
     else cuePoint=pausePos;
     cueSet=true;cueBtn.classList.toggle('active');drawWave();
   };
   loopBtn.onclick=()=>{loop=!loop;loopBtn.classList.toggle('active');if(src)src.loop=loop;};
 
-  volSlider.oninput=()=>{volNum.textContent=Math.round(volSlider.value*100)+'%';};
-
-  // click on waveform to seek
+  // click canvas to seek
   canvas.onclick=e=>{
     if(!buf)return;
     const rect=canvas.getBoundingClientRect();
@@ -171,50 +301,121 @@ function makeDeck(id, canvasId) {
     drawWave();
   };
 
-  // animation loop
-  function anim(){
+  let raf=0;
+  function anim(time){
     if(playing){pausePos+=ctx.currentTime-startTime;startTime=ctx.currentTime;drawWave();}
-    animId=requestAnimationFrame(anim);
+    raf=requestAnimationFrame(anim);
   }
-  anim();
+  raf=requestAnimationFrame(anim);
 
-  return {gain,deck:id,buf:()=>buf,pausePos:()=>pausePos,togglePlay,stopPlay,startPlay,setPos:p=>{pausePos=p}};
+  return {gain,deck:id,buf:()=>buf,pausePos:()=>pausePos,togglePlay,stopPlay,startPlay,cuePoint:()=>cuePoint};
 }
-
-function formatTime(s){const m=Math.floor(s/60);return m+':'+String(Math.floor(s%60)).padStart(2,'0')}
 
 const a=makeDeck('a','wave-a');
 const b=makeDeck('b','wave-b');
 
-// crossfader
-const xf=document.getElementById('crossfader');
-xf.oninput=()=>{
-  const v=parseFloat(xf.value);
-  a.gain.gain.value=parseFloat(document.getElementById('vol-a').value)*(1-v);
-  b.gain.gain.value=parseFloat(document.getElementById('vol-b').value)*v;
-};
-document.getElementById('vol-a').oninput=()=>xf.oninput();
-document.getElementById('vol-b').oninput=()=>xf.oninput();
-xf.oninput();
+/* ---- volume knobs ---- */
+document.querySelectorAll('.knob-wrap').forEach(wrap=>{
+  const deck=wrap.dataset.deck;
+  const knob=wrap.querySelector('.knob');
+  let dragging=false,startY=0,startVal=0;
 
-// keyboard
+  function applyVol(v){
+    vols[deck]=Math.max(0,Math.min(1,v));
+    updateKnobs();
+    updateMix();
+  }
+
+  function onPointerDown(e){
+    dragging=true;startY=e.clientY;startVal=vols[deck];
+    e.preventDefault();knob.setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e){
+    if(!dragging)return;
+    const dy=startY-e.clientY;
+    applyVol(startVal+dy/120);
+  }
+  function onPointerUp(){
+    if(!dragging)return;
+    dragging=false;
+  }
+  knob.addEventListener('pointerdown',onPointerDown);
+  knob.addEventListener('pointermove',onPointerMove);
+  knob.addEventListener('pointerup',onPointerUp);
+  knob.addEventListener('pointercancel',onPointerUp);
+
+  // click to toggle mute
+  knob.addEventListener('dblclick',()=>{
+    applyVol(vols[deck]>0?0:1);
+  });
+});
+updateKnobs();
+
+/* ---- crossfader ---- */
+const faderTrack=document.getElementById('fader-track');
+const faderKnob=document.getElementById('fader-knob');
+let faderDragging=false,faderStartY=0,faderStartVal=0;
+
+function setFader(v){
+  xfPos=Math.max(0,Math.min(1,v));
+  const trackH=faderTrack.clientHeight;
+  const knobH=faderKnob.clientHeight;
+  faderKnob.style.top=((trackH-knobH)*xfPos)+'px';
+  updateMix();
+}
+
+function updateMix(){
+  const v=xfPos;
+  const va=vols.a*(1-v)*2; // compensate for equal-power crossfade
+  const vb=vols.b*v*2;
+  a.gain.gain.value=va;
+  b.gain.gain.value=vb;
+  const xfPct=Math.round(xfPos*100);
+  document.querySelectorAll('.crossfader-section label').forEach(l=>{
+    if(l.textContent==='A')l.textContent='A'; else l.textContent='B';
+  });
+  // accent the active side
+  const labels=document.querySelectorAll('.crossfader-section label');
+  if(labels[0])labels[0].style.color=xfPos<0.5?'var(--accent)':'var(--muted)';
+  if(labels[1])labels[1].style.color=xfPos>0.5?'var(--accent)':'var(--muted)';
+}
+
+faderTrack.addEventListener('pointerdown',e=>{
+  faderDragging=true;faderStartY=e.clientY;
+  faderStartVal=xfPos;
+  const rect=faderTrack.getBoundingClientRect();
+  setFader((e.clientY-rect.top)/rect.height);
+  faderKnob.setPointerCapture(e.pointerId);
+});
+faderKnob.addEventListener('pointerdown',e=>{
+  faderDragging=true;faderStartY=e.clientY;faderStartVal=xfPos;
+  e.stopPropagation();faderKnob.setPointerCapture(e.pointerId);
+});
+document.addEventListener('pointermove',e=>{
+  if(!faderDragging)return;
+  const rect=faderTrack.getBoundingClientRect();
+  setFader((e.clientY-rect.top)/rect.height);
+});
+document.addEventListener('pointerup',()=>{faderDragging=false;});
+
+/* ---- keyboard ---- */
 let focus='a';
 document.addEventListener('keydown',e=>{
-  if(e.target.tagName==='INPUT')return;
+  if(e.target.tagName==='INPUT'||e.target.tagName==='LABEL')return;
   switch(e.key){
-    case '1':focus='a';document.getElementById('deck-a').style.border='1px solid #ff6600';document.getElementById('deck-b').style.border='none';break;
-    case '2':focus='b';document.getElementById('deck-b').style.border='1px solid #ff6600';document.getElementById('deck-a').style.border='none';break;
+    case '1':focus='a';document.getElementById('deck-a').style.outline='2px solid var(--focus)';document.getElementById('deck-b').style.outline='none';break;
+    case '2':focus='b';document.getElementById('deck-b').style.outline='2px solid var(--focus)';document.getElementById('deck-a').style.outline='none';break;
     case ' ':e.preventDefault();(focus==='a'?a:b).togglePlay();break;
-    case 'ArrowLeft':xf.value=Math.max(0,parseFloat(xf.value)-0.05);xf.oninput();break;
-    case 'ArrowRight':xf.value=Math.min(1,parseFloat(xf.value)+0.05);xf.oninput();break;
-    case 'q':{const s=document.getElementById('vol-a');s.value=Math.max(0,parseFloat(s.value)-0.05);s.oninput();xf.oninput();break;}
-    case 'w':{const s=document.getElementById('vol-a');s.value=Math.min(1,parseFloat(s.value)+0.05);s.oninput();xf.oninput();break;}
-    case 'i':{const s=document.getElementById('vol-b');s.value=Math.max(0,parseFloat(s.value)-0.05);s.oninput();xf.oninput();break;}
-    case 'o':{const s=document.getElementById('vol-b');s.value=Math.min(1,parseFloat(s.value)+0.05);s.oninput();xf.oninput();break;}
+    case 'ArrowLeft':setFader(Math.max(0,xfPos-0.04));break;
+    case 'ArrowRight':setFader(Math.min(1,xfPos+0.04));break;
+    case 'q':{const v=Math.max(0,vols.a-0.05);vols.a=v;updateKnobs();updateMix();break;}
+    case 'w':{const v=Math.min(1,vols.a+0.05);vols.a=v;updateKnobs();updateMix();break;}
+    case 'i':{const v=Math.max(0,vols.b-0.05);vols.b=v;updateKnobs();updateMix();break;}
+    case 'o':{const v=Math.min(1,vols.b+0.05);vols.b=v;updateKnobs();updateMix();break;}
   }
 });
-// initial focus
-document.getElementById('deck-a').style.border='1px solid #ff6600';
+document.getElementById('deck-a').style.outline='2px solid var(--focus)';
+setFader(0.5);
 </script>
 </body>
 </html>
