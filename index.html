@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dj-mixer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111;color:#fff;font:14px/1.4 monospace;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.mixer{display:flex;gap:0;background:#1a1a1a;border-radius:12px;padding:20px;border:1px solid #333}
+.deck{background:#222;border-radius:8px;padding:16px;width:260px;display:flex;flex-direction:column;gap:12px}
+.deck h2{font-size:13px;color:#888;text-transform:uppercase;letter-spacing:2px}
+.crossfader-section{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 16px;gap:8px}
+.crossfader-section label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%}
+input[type=range]::-webkit-slider-runnable-track{height:4px;background:#444;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:16px;width:16px;border-radius:50%;background:#ff6600;margin-top:-6px;cursor:pointer}
+input[type=range]::-moz-range-track{height:4px;background:#444;border-radius:2px}
+input[type=range]::-moz-range-thumb{height:16px;width:16px;border-radius:50%;background:#ff6600;border:none;cursor:pointer}
+.crossfader-section input[type=range]{width:120px;transform:rotate(-90deg);margin:40px 0}
+.deck input[type=range]{width:100%}
+.btn{background:#333;border:1px solid #444;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font:inherit;text-align:center}
+.btn:hover{background:#444}
+.btn.active{background:#ff6600;border-color:#ff6600}
+.file-label{display:block;background:#333;border:1px dashed #555;border-radius:6px;padding:12px;text-align:center;cursor:pointer;font-size:12px;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-label:hover{border-color:#ff6600;color:#fff}
+input[type=file]{display:none}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+.controls .btn{flex:1;min-width:60px;padding:8px}
+.track-info{font-size:11px;color:#666;}
+.track-info span{color:#aaa}
+.volume-section label{font-size:11px;color:#666;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="mixer">
+  <div class="deck" id="deck-a">
+    <h2>Deck A</h2>
+    <label class="file-label" id="label-a">Load Track...</label>
+    <input type="file" id="file-a" accept="audio/*">
+    <div class="controls">
+      <button class="btn" id="play-a">▶ Play</button>
+      <button class="btn" id="stop-a">■ Stop</button>
+    </div>
+    <div class="volume-section">
+      <label><span>Volume</span><span id="vol-label-a">100%</span></label>
+      <input type="range" id="vol-a" min="0" max="1" step="0.01" value="1">
+    </div>
+    <div class="track-info" id="info-a">No track loaded</div>
+  </div>
+  <div class="crossfader-section">
+    <label>← A</label>
+    <input type="range" id="crossfader" min="0" max="1" step="0.01" value="0.5">
+    <label>B →</label>
+  </div>
+  <div class="deck" id="deck-b">
+    <h2>Deck B</h2>
+    <label class="file-label" id="label-b">Load Track...</label>
+    <input type="file" id="file-b" accept="audio/*">
+    <div class="controls">
+      <button class="btn" id="play-b">▶ Play</button>
+      <button class="btn" id="stop-b">■ Stop</button>
+    </div>
+    <div class="volume-section">
+      <label><span>Volume</span><span id="vol-label-b">100%</span></label>
+      <input type="range" id="vol-b" min="0" max="1" step="0.01" value="1">
+    </div>
+    <div class="track-info" id="info-b">No track loaded</div>
+  </div>
+</div>
+<script>
+const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+function makeDeck(id) {
+  let source = null, buf = null, gain = ctx.createGain(), playing = false, startedAt = 0, pausedPos = 0;
+  gain.connect(ctx.destination);
+  const playBtn = document.getElementById('play-'+id);
+  const stopBtn = document.getElementById('stop-'+id);
+  const volSlider = document.getElementById('vol-'+id);
+  const volLabel = document.getElementById('vol-label-'+id);
+  const info = document.getElementById('info-'+id);
+  const fileInput = document.getElementById('file-'+id);
+  const label = document.getElementById('label-'+id);
+
+  fileInput.onchange = () => {
+    const f = fileInput.files[0];
+    if(!f) return;
+    if(source) { source.stop(); playing = false; pausedPos = 0; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      ctx.decodeAudioData(e.target.result, b => {
+        buf = b; pausedPos = 0; playing = false;
+        playBtn.textContent = '▶ Play';
+        label.textContent = f.name;
+        info.textContent = Math.round(b.duration)+'s | '+f.name;
+        ctx.resume();
+      });
+    };
+    reader.readAsArrayBuffer(f);
+  };
+
+  playBtn.onclick = () => {
+    if(!buf) return;
+    if(playing) {
+      source.stop(); playing = false;
+      pausedPos += ctx.currentTime - startedAt;
+      playBtn.textContent = '▶ Play';
+    } else {
+      source = ctx.createBufferSource();
+      source.buffer = buf;
+      source.connect(gain);
+      source.start(0, pausedPos);
+      startedAt = ctx.currentTime;
+      playing = true;
+      playBtn.textContent = '❚❚ Pause';
+      ctx.resume();
+    }
+  };
+
+  stopBtn.onclick = () => {
+    if(source) source.stop();
+    playing = false; pausedPos = 0; startedAt = 0;
+    playBtn.textContent = '▶ Play';
+  };
+
+  volSlider.oninput = () => {
+    gain.gain.value = parseFloat(volSlider.value);
+    volLabel.textContent = Math.round(volSlider.value*100)+'%';
+  };
+
+  return { gain, deck: id };
+}
+
+const deckA = makeDeck('a');
+const deckB = makeDeck('b');
+
+const crossfader = document.getElementById('crossfader');
+crossfader.oninput = () => {
+  const v = parseFloat(crossfader.value);
+  deckA.gain.gain.value = parseFloat(document.getElementById('vol-a').value) * (1 - v);
+  deckB.gain.gain.value = parseFloat(document.getElementById('vol-b').value) * v;
+};
+
+// Recalculate crossfader when individual volumes change
+document.getElementById('vol-a').oninput = () => crossfader.oninput();
+document.getElementById('vol-b').oninput = () => crossfader.oninput();
+// Also re-init vol labels
+document.getElementById('vol-a').oninput();
+document.getElementById('vol-b').oninput();
+</script>
+</body>
+</html>
