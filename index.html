@@ -6,147 +6,215 @@
 <title>dj-mixer</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#111;color:#fff;font:14px/1.4 monospace;display:flex;justify-content:center;align-items:center;min-height:100vh}
-.mixer{display:flex;gap:0;background:#1a1a1a;border-radius:12px;padding:20px;border:1px solid #333}
-.deck{background:#222;border-radius:8px;padding:16px;width:260px;display:flex;flex-direction:column;gap:12px}
-.deck h2{font-size:13px;color:#888;text-transform:uppercase;letter-spacing:2px}
-.crossfader-section{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 16px;gap:8px}
-.crossfader-section label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:1px}
+body{background:#0d0d0d;color:#fff;font:12px/1.4 monospace;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.mixer{display:flex;gap:0;background:#161616;border-radius:12px;padding:20px;border:1px solid #2a2a2a}
+.deck{background:#1c1c1c;border-radius:8px;padding:14px;width:340px;display:flex;flex-direction:column;gap:8px}
+.deck h2{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:2px}
+.deck h2 .badge{color:#ff6600;margin-left:6px}
+canvas{display:block;width:100%;height:60px;border-radius:4px;background:#111;cursor:pointer}
+.controls{display:flex;gap:6px}
+.controls .btn,.controls .btn-sm{background:#2a2a2a;border:1px solid #333;color:#fff;padding:6px 12px;border-radius:5px;cursor:pointer;font:inherit;text-align:center}
+.controls .btn-sm{padding:4px 8px;font-size:11px}
+.controls .btn:hover,.controls .btn-sm:hover{background:#333}
+.controls .btn.active{background:#ff6600;border-color:#ff6600}
+.controls .btn.on{background:#335533;border-color:#448844}
 input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%}
-input[type=range]::-webkit-slider-runnable-track{height:4px;background:#444;border-radius:2px}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:16px;width:16px;border-radius:50%;background:#ff6600;margin-top:-6px;cursor:pointer}
-input[type=range]::-moz-range-track{height:4px;background:#444;border-radius:2px}
-input[type=range]::-moz-range-thumb{height:16px;width:16px;border-radius:50%;background:#ff6600;border:none;cursor:pointer}
-.crossfader-section input[type=range]{width:120px;transform:rotate(-90deg);margin:40px 0}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:#333;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:14px;width:14px;border-radius:50%;background:#ff6600;margin-top:-5px;cursor:pointer}
+input[type=range]::-moz-range-track{height:3px;background:#333;border-radius:2px}
+input[type=range]::-moz-range-thumb{height:14px;width:14px;border-radius:50%;background:#ff6600;border:none;cursor:pointer}
+.row{display:flex;gap:8px;align-items:center}
+.row .btn-sm{flex-shrink:0}
+.crossfader-section{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 14px;gap:4px}
+.crossfader-section label{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px}
+.crossfader-section input[type=range]{width:100px;transform:rotate(-90deg);margin:36px 0}
 .deck input[type=range]{width:100%}
-.btn{background:#333;border:1px solid #444;color:#fff;padding:8px 16px;border-radius:6px;cursor:pointer;font:inherit;text-align:center}
-.btn:hover{background:#444}
-.btn.active{background:#ff6600;border-color:#ff6600}
-.file-label{display:block;background:#333;border:1px dashed #555;border-radius:6px;padding:12px;text-align:center;cursor:pointer;font-size:12px;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.file-label:hover{border-color:#ff6600;color:#fff}
+.file-label{display:block;background:#1c1c1c;border:1px dashed #333;border-radius:5px;padding:8px;text-align:center;cursor:pointer;font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-label:hover{border-color:#ff6600;color:#aaa}
 input[type=file]{display:none}
-.controls{display:flex;gap:8px;flex-wrap:wrap}
-.controls .btn{flex:1;min-width:60px;padding:8px}
-.track-info{font-size:11px;color:#666;}
-.track-info span{color:#aaa}
-.volume-section label{font-size:11px;color:#666;display:flex;justify-content:space-between}
+.sub{font-size:10px;color:#555;text-align:center;margin-top:4px}
+.kbd{color:#888;font-size:10px}
+.vol-label{display:flex;justify-content:space-between;font-size:10px;color:#555}
 </style>
 </head>
 <body>
 <div class="mixer">
   <div class="deck" id="deck-a">
-    <h2>Deck A</h2>
-    <label class="file-label" id="label-a">Load Track...</label>
+    <h2>Deck A <span class="badge">[1]</span></h2>
+    <label class="file-label" id="label-a">⏏ Load Track</label>
     <input type="file" id="file-a" accept="audio/*">
+    <canvas id="wave-a" height="60"></canvas>
     <div class="controls">
-      <button class="btn" id="play-a">▶ Play</button>
-      <button class="btn" id="stop-a">■ Stop</button>
+      <button class="btn" id="play-a">▶</button>
+      <button class="btn-sm" id="cue-a">Cue</button>
+      <button class="btn-sm" id="loop-a">⟳</button>
     </div>
-    <div class="volume-section">
-      <label><span>Volume</span><span id="vol-label-a">100%</span></label>
-      <input type="range" id="vol-a" min="0" max="1" step="0.01" value="1">
-    </div>
-    <div class="track-info" id="info-a">No track loaded</div>
+    <div class="vol-label"><span>A volume</span><span id="vol-num-a">100%</span></div>
+    <input type="range" id="vol-a" min="0" max="1" step="0.01" value="1">
+    <div class="sub" id="info-a">—</div>
   </div>
   <div class="crossfader-section">
-    <label>← A</label>
+    <label>A</label>
     <input type="range" id="crossfader" min="0" max="1" step="0.01" value="0.5">
-    <label>B →</label>
+    <label>B</label>
   </div>
   <div class="deck" id="deck-b">
-    <h2>Deck B</h2>
-    <label class="file-label" id="label-b">Load Track...</label>
+    <h2>Deck B <span class="badge">[2]</span></h2>
+    <label class="file-label" id="label-b">⏏ Load Track</label>
     <input type="file" id="file-b" accept="audio/*">
+    <canvas id="wave-b" height="60"></canvas>
     <div class="controls">
-      <button class="btn" id="play-b">▶ Play</button>
-      <button class="btn" id="stop-b">■ Stop</button>
+      <button class="btn" id="play-b">▶</button>
+      <button class="btn-sm" id="cue-b">Cue</button>
+      <button class="btn-sm" id="loop-b">⟳</button>
     </div>
-    <div class="volume-section">
-      <label><span>Volume</span><span id="vol-label-b">100%</span></label>
-      <input type="range" id="vol-b" min="0" max="1" step="0.01" value="1">
-    </div>
-    <div class="track-info" id="info-b">No track loaded</div>
+    <div class="vol-label"><span>B volume</span><span id="vol-num-b">100%</span></div>
+    <input type="range" id="vol-b" min="0" max="1" step="0.01" value="1">
+    <div class="sub" id="info-b">—</div>
   </div>
 </div>
 <script>
 const ctx = new (window.AudioContext || window.webkitAudioContext)();
 
-function makeDeck(id) {
-  let source = null, buf = null, gain = ctx.createGain(), playing = false, startedAt = 0, pausedPos = 0;
+function makeDeck(id, canvasId) {
+  let src=null, buf=null, gain=ctx.createGain(), playing=false, startTime=0, pausePos=0, loop=false;
+  let cuePoint=0, cueSet=false;
   gain.connect(ctx.destination);
-  const playBtn = document.getElementById('play-'+id);
-  const stopBtn = document.getElementById('stop-'+id);
-  const volSlider = document.getElementById('vol-'+id);
-  const volLabel = document.getElementById('vol-label-'+id);
-  const info = document.getElementById('info-'+id);
-  const fileInput = document.getElementById('file-'+id);
-  const label = document.getElementById('label-'+id);
+  const playBtn=document.getElementById('play-'+id);
+  const cueBtn=document.getElementById('cue-'+id);
+  const loopBtn=document.getElementById('loop-'+id);
+  const volSlider=document.getElementById('vol-'+id);
+  const volNum=document.getElementById('vol-num-'+id);
+  const info=document.getElementById('info-'+id);
+  const fi=document.getElementById('file-'+id);
+  const lb=document.getElementById('label-'+id);
+  const canvas=document.getElementById('wave-'+id);
+  const cctx=canvas.getContext('2d');
 
-  fileInput.onchange = () => {
-    const f = fileInput.files[0];
-    if(!f) return;
-    if(source) { source.stop(); playing = false; pausedPos = 0; }
-    const reader = new FileReader();
-    reader.onload = e => {
-      ctx.decodeAudioData(e.target.result, b => {
-        buf = b; pausedPos = 0; playing = false;
-        playBtn.textContent = '▶ Play';
-        label.textContent = f.name;
-        info.textContent = Math.round(b.duration)+'s | '+f.name;
-        ctx.resume();
+  let animId=null;
+  function drawWave() {
+    const w=canvas.width=canvas.clientWidth, h=canvas.height;
+    cctx.fillStyle='#111';cctx.fillRect(0,0,w,h);
+    if(!buf){cctx.fillStyle='#222';cctx.font='10px monospace';cctx.fillText('load a track',8,h/2+4);return}
+    const len=buf.getChannelData(0);
+    const step=Math.floor(len.length/w);
+    cctx.fillStyle='#ff6600';
+    for(let i=0;i<w;i++){
+      let peak=0;const end=Math.min((i+1)*step,len.length);
+      for(let j=i*step;j<end;j++){const a=Math.abs(len[j]);if(a>peak)peak=a}
+      cctx.fillRect(i,h-4-peak*h*0.45,1,Math.max(4,peak*h*0.45));
+    }
+    // position marker
+    if(playing||pausePos>0){
+      const pct=pausePos/(buf.duration||1);
+      const mx=pct*w;
+      cctx.strokeStyle='#fff';cctx.beginPath();cctx.moveTo(mx,0);cctx.lineTo(mx,h);cctx.stroke();
+    }
+    if(cueSet){
+      const cx=cuePoint/buf.duration*w;
+      cctx.fillStyle='#0f0';cctx.fillRect(cx-1,h-8,3,8);
+    }
+  }
+
+  function startPlay(pos){
+    if(!buf)return;
+    if(src)try{src.stop()}catch(e){}
+    src=ctx.createBufferSource();
+    src.buffer=buf;src.loop=loop;src.connect(gain);
+    src.start(0,pos);startTime=ctx.currentTime;pausePos=pos;playing=true;
+    playBtn.textContent='❚❚';playBtn.classList.add('on');
+    ctx.resume();
+  }
+
+  function stopPlay(){if(src)try{src.stop()}catch(e){};playing=false;playBtn.textContent='▶';playBtn.classList.remove('on');}
+
+  function togglePlay(){
+    if(!buf)return;
+    if(playing){stopPlay();pausePos+=ctx.currentTime-startTime;}
+    else startPlay(pausePos);
+  }
+
+  fi.onchange=()=>{
+    const f=fi.files[0];if(!f)return;
+    stopPlay();pausePos=0;cuePoint=0;cueSet=false;cueBtn.classList.remove('active');
+    const r=new FileReader();
+    r.onload=e=>{
+      ctx.decodeAudioData(e.target.result, b=>{
+        buf=b;pausePos=0;
+        lb.textContent=f.name;
+        info.textContent=formatTime(b.duration)+' · '+(b.sampleRate/1000).toFixed(1)+'kHz';
+        drawWave();
       });
     };
-    reader.readAsArrayBuffer(f);
+    r.readAsArrayBuffer(f);
+  };
+  playBtn.onclick=togglePlay;
+  cueBtn.onclick=()=>{
+    if(!buf)return;
+    if(playing){cuePoint=pausePos+ctx.currentTime-startTime;}
+    else cuePoint=pausePos;
+    cueSet=true;cueBtn.classList.toggle('active');drawWave();
+  };
+  loopBtn.onclick=()=>{loop=!loop;loopBtn.classList.toggle('active');if(src)src.loop=loop;};
+
+  volSlider.oninput=()=>{volNum.textContent=Math.round(volSlider.value*100)+'%';};
+
+  // click on waveform to seek
+  canvas.onclick=e=>{
+    if(!buf)return;
+    const rect=canvas.getBoundingClientRect();
+    const pct=(e.clientX-rect.left)/rect.width;
+    const wasPlaying=playing;
+    if(wasPlaying)stopPlay();
+    pausePos=Math.max(0,Math.min(buf.duration-0.01,pct*buf.duration));
+    if(wasPlaying)startPlay(pausePos);
+    drawWave();
   };
 
-  playBtn.onclick = () => {
-    if(!buf) return;
-    if(playing) {
-      source.stop(); playing = false;
-      pausedPos += ctx.currentTime - startedAt;
-      playBtn.textContent = '▶ Play';
-    } else {
-      source = ctx.createBufferSource();
-      source.buffer = buf;
-      source.connect(gain);
-      source.start(0, pausedPos);
-      startedAt = ctx.currentTime;
-      playing = true;
-      playBtn.textContent = '❚❚ Pause';
-      ctx.resume();
-    }
-  };
+  // animation loop
+  function anim(){
+    if(playing){pausePos+=ctx.currentTime-startTime;startTime=ctx.currentTime;drawWave();}
+    animId=requestAnimationFrame(anim);
+  }
+  anim();
 
-  stopBtn.onclick = () => {
-    if(source) source.stop();
-    playing = false; pausedPos = 0; startedAt = 0;
-    playBtn.textContent = '▶ Play';
-  };
-
-  volSlider.oninput = () => {
-    gain.gain.value = parseFloat(volSlider.value);
-    volLabel.textContent = Math.round(volSlider.value*100)+'%';
-  };
-
-  return { gain, deck: id };
+  return {gain,deck:id,buf:()=>buf,pausePos:()=>pausePos,togglePlay,stopPlay,startPlay,setPos:p=>{pausePos=p}};
 }
 
-const deckA = makeDeck('a');
-const deckB = makeDeck('b');
+function formatTime(s){const m=Math.floor(s/60);return m+':'+String(Math.floor(s%60)).padStart(2,'0')}
 
-const crossfader = document.getElementById('crossfader');
-crossfader.oninput = () => {
-  const v = parseFloat(crossfader.value);
-  deckA.gain.gain.value = parseFloat(document.getElementById('vol-a').value) * (1 - v);
-  deckB.gain.gain.value = parseFloat(document.getElementById('vol-b').value) * v;
+const a=makeDeck('a','wave-a');
+const b=makeDeck('b','wave-b');
+
+// crossfader
+const xf=document.getElementById('crossfader');
+xf.oninput=()=>{
+  const v=parseFloat(xf.value);
+  a.gain.gain.value=parseFloat(document.getElementById('vol-a').value)*(1-v);
+  b.gain.gain.value=parseFloat(document.getElementById('vol-b').value)*v;
 };
+document.getElementById('vol-a').oninput=()=>xf.oninput();
+document.getElementById('vol-b').oninput=()=>xf.oninput();
+xf.oninput();
 
-// Recalculate crossfader when individual volumes change
-document.getElementById('vol-a').oninput = () => crossfader.oninput();
-document.getElementById('vol-b').oninput = () => crossfader.oninput();
-// Also re-init vol labels
-document.getElementById('vol-a').oninput();
-document.getElementById('vol-b').oninput();
+// keyboard
+let focus='a';
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  switch(e.key){
+    case '1':focus='a';document.getElementById('deck-a').style.border='1px solid #ff6600';document.getElementById('deck-b').style.border='none';break;
+    case '2':focus='b';document.getElementById('deck-b').style.border='1px solid #ff6600';document.getElementById('deck-a').style.border='none';break;
+    case ' ':e.preventDefault();(focus==='a'?a:b).togglePlay();break;
+    case 'ArrowLeft':xf.value=Math.max(0,parseFloat(xf.value)-0.05);xf.oninput();break;
+    case 'ArrowRight':xf.value=Math.min(1,parseFloat(xf.value)+0.05);xf.oninput();break;
+    case 'q':{const s=document.getElementById('vol-a');s.value=Math.max(0,parseFloat(s.value)-0.05);s.oninput();xf.oninput();break;}
+    case 'w':{const s=document.getElementById('vol-a');s.value=Math.min(1,parseFloat(s.value)+0.05);s.oninput();xf.oninput();break;}
+    case 'i':{const s=document.getElementById('vol-b');s.value=Math.max(0,parseFloat(s.value)-0.05);s.oninput();xf.oninput();break;}
+    case 'o':{const s=document.getElementById('vol-b');s.value=Math.min(1,parseFloat(s.value)+0.05);s.oninput();xf.oninput();break;}
+  }
+});
+// initial focus
+document.getElementById('deck-a').style.border='1px solid #ff6600';
 </script>
 </body>
 </html>
