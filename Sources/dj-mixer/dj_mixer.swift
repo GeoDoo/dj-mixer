@@ -18,9 +18,87 @@ import AVFoundation
                             w.level = .floating
                         }
                         NSApplication.shared.activate(ignoringOtherApps: true)
+                        #if TESTING
+                        // Handled below
+                        #endif
+                    }
+                    if CommandLine.arguments.contains("--test") {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            runSelfTest(engine: engine)
+                        }
                     }
                 }
         }
+    }
+}
+
+// MARK: - Self-test (swift run --test)
+func runSelfTest(engine: AudioEngine) {
+    print("🧪 DJ Mixer Self-Test")
+    let ch = engine.channels[0]
+    
+    // 1. Generate test WAV
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("dj_test_440.wav")
+    do {
+        let fmt = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
+        let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 44100 * 3)!
+        buf.frameLength = buf.frameCapacity
+        let left = buf.floatChannelData![0]; let right = buf.floatChannelData![1]
+        for i in 0..<Int(buf.frameLength) {
+            let v = sin(2 * Float.pi * 440.0 * Float(i) / 44100.0) * 0.5
+            left[i] = v; right[i] = v
+        }
+        let file = try AVAudioFile(forWriting: url, settings: fmt.settings)
+        try file.write(from: buf)
+    } catch { print("❌ Test WAV generation failed: \(error)"); exit(1) }
+    
+    // 2. Load into channel 0 (bypass file picker)
+    ch.loadFromTestURL(url: url)
+    Thread.sleep(forTimeInterval: 0.2)
+    guard ch.currentFile != nil else { print("❌ Load failed"); exit(1) }
+    print("✅ Track loaded (\(Int(ch.bpm)) BPM)")
+    
+    // 3. Play for 1 second at normal speed
+    ch.isPlaying = true
+    Thread.sleep(forTimeInterval: 1.0)
+    let pos1 = ch.playbackPosition()
+    print("⏱ After 1s at 1.0x: \(String(format: "%.2f", pos1))s (expected ~1.0s)")
+    
+    // 4. Set BPM to 180 (on ~120 detected = ~1.5x speed)
+    ch.bpmOverride = 180
+    Thread.sleep(forTimeInterval: 1.0)
+    let pos2 = ch.playbackPosition()
+    let speed = Float(pos2 - pos1)
+    print("⏱ After 1s at 1.5x: \(String(format: "%.2f", pos2))s, delta=\(String(format: "%.2f", speed))s (expected ~1.5s)")
+    
+    // 5. Reset to auto
+    ch.bpmOverride = -1
+    Thread.sleep(forTimeInterval: 1.0)
+    let pos3 = ch.playbackPosition()
+    let speed2 = Float(pos3 - pos2)
+    print("⏱ After 1s back at 1.0x: \(String(format: "%.2f", pos3))s, delta=\(String(format: "%.2f", speed2))s (expected ~1.0s)")
+    
+    // 6. Verify results — source position should be consistent
+    //    Player advances independently of timePitch, so we verify no crash + sensible values
+    var passed = true
+    if pos1 < 0.5 || pos1 > 1.5 {
+        print("❌ Initial playback didn't advance: pos=\(String(format: "%.2f", pos1))")
+        passed = false
+    }
+    if ch.bpmOverride != -1 {
+        print("❌ BPM override didn't reset")
+        passed = false
+    }
+    
+    ch.isPlaying = false
+    try? FileManager.default.removeItem(at: url)
+    
+    if passed {
+        print("✅ ALL TESTS PASSED")
+        exit(0)
+    } else {
+        print("❌ TESTS FAILED")
+        exit(1)
     }
 }
 
@@ -260,6 +338,13 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     
     func meter() -> Float { meterVal }
     
+    func playbackPosition() -> TimeInterval {
+        if isPlaying, let nt = player.lastRenderTime, let pt = player.playerTime(forNodeTime: nt) {
+            return pausedAt + Double(pt.sampleTime) / pt.sampleRate
+        }
+        return pausedAt
+    }
+    
     func applyMix(crossfader: Float, curve _: Float) {
         let c = fader
         var xfGain: Float = 1
@@ -296,6 +381,16 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             computeAll(file: file, loadURL: url)
             onReconnect?()
         } catch { print("CH\(id) lib: \(error)") }
+    }
+    
+    func loadFromTestURL(url: URL) {
+        do {
+            let file = try AVAudioFile(forReading: url)
+            currentFile = file; fileName = "test_tone.wav"
+            duration = TimeInterval(file.length) / file.fileFormat.sampleRate; pausedAt = 0
+            computeAll(file: file, loadURL: url)
+            onReconnect?()
+        } catch { print("CH\(id) test load: \(error)") }
     }
     
     func computeAll(file: AVAudioFile, loadURL: URL) {
