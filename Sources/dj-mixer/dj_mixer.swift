@@ -100,7 +100,9 @@ import AVFoundation
             let detected = ch.bpm
             if detected > 0 && ch.bpmOverride >= 0 {
                 ch.timePitch.rate = ch.bpmOverride / Float(detected)
-                let comp = max(ch.timePitch.rate * ch.timePitch.rate, 0.1)
+                // Volume compensation: TimePitch loses energy during overlap-add
+                let r = ch.timePitch.rate
+                let comp = r >= 1.0 ? r : (1.0 / r)
                 ch.applyMix(crossfader: crossfader, curve: crossfaderCurve, rateComp: comp)
             } else {
                 ch.timePitch.rate = 1.0
