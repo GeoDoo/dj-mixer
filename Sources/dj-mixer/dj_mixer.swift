@@ -227,6 +227,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
         engine.attach(player); engine.attach(varispeed); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
         engine.connect(player, to: varispeed, format: nil)
         engine.connect(varispeed, to: eq, format: nil)
+        engine.connect(eq, to: trimMixer, format: nil)
         engine.connect(trimMixer, to: channelMixer, format: nil)
         engine.connect(channelMixer, to: master, format: nil)
         engine.connect(cueMixer, to: master, format: nil)
@@ -517,7 +518,7 @@ struct ChannelStripView: View {
                     .font(.system(size: 8)).foregroundStyle(Color(white: 0.35)).lineLimit(1)
                 Spacer()
                 if !channel.fileName.isEmpty {
-                    let eff = Int(channel.bpmOverride >= 0 ? channel.bpmOverride : channel.bpm)
+                    let eff = Int(channel.bpmOverride >= 0 ? channel.bpmOverride : Float(channel.bpm))
                     Text("\(eff) BPM").font(.system(size: 8, weight: .medium))
                         .foregroundStyle(channel.bpmOverride >= 0 ? Color.orange : Color(white: 0.4))
                     TextField("", text: $bpmText)
@@ -527,7 +528,7 @@ struct ChannelStripView: View {
                             let v = bpmText.trimmingCharacters(in: .whitespaces)
                             if v.isEmpty { channel.bpmOverride = -1 }
                             else if let n = Float(v) { channel.bpmOverride = n }
-                            bpmText = "\(Int(channel.bpmOverride >= 0 ? channel.bpmOverride : channel.bpm))"
+                            bpmText = "\(Int(channel.bpmOverride >= 0 ? channel.bpmOverride : Float(channel.bpm)))"
                         }
                 }
             }
