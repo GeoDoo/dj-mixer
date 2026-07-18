@@ -1,0 +1,13 @@
+{
+  "name": "dj-mixer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "prettier --check .",
+    "dev": "python3 -m http.server 8080"
+  },
+  "devDependencies": {
+    "prettier": "^3.0.0"
+  }
+}
