@@ -33,8 +33,7 @@ import AVFoundation
     var masterVolume: Float = 0.85
     var boothVolume: Float = 0.5
     var masterMixer = AVAudioMixerNode()
-    var boothMixer = AVAudioMixerNode()
-    var fx: BeatFXProcessor
+    var fx: BeatFXProcessor?
     
     // Beat FX state
     var fxType: FXType = .delay
@@ -48,15 +47,10 @@ import AVFoundation
     var masterPeak: Float = 0
     
     init() {
-        fx = BeatFXProcessor(engine: avEngine)
         avEngine.attach(masterMixer)
-        avEngine.attach(boothMixer)
         avEngine.connect(masterMixer, to: avEngine.outputNode, format: nil)
-        avEngine.connect(boothMixer, to: avEngine.outputNode, format: nil)
-        boothMixer.volume = 0
-        for ch in channels { ch.attach(to: avEngine, master: masterMixer, fx: fx) }
+        for ch in channels { ch.attach(to: avEngine, master: masterMixer) }
         for ch in channels { ch.onUpdate = { [weak self] in self?.updateMix() } }
-        fx.onUpdate = { [weak self] in self?.updateMix() }
     }
     
     func start() {
@@ -67,9 +61,6 @@ import AVFoundation
     func updateMix() {
         for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
         masterMixer.volume = masterVolume
-        boothMixer.volume = boothVolume * 0.3
-        if fxOn { fx.apply(type: fxType, param: fxParam, beat: fxBeat) }
-        else { fx.bypassAll() }
     }
     
     func startMeterTimer() {
@@ -203,7 +194,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
         }
     }
     
-    func attach(to engine: AVAudioEngine, master: AVAudioMixerNode, fx: BeatFXProcessor) {
+    func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
         engine.attach(player); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
         engine.connect(player, to: eq, format: nil)
         engine.connect(eq, to: trimMixer, format: nil)
@@ -334,27 +325,26 @@ struct ContentView: View {
     @Bindable var engine: AudioEngine
     
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 4) {
             HStack {
                 Text("DJM-TOUR1").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(white: 0.7))
                 Spacer()
                 Text("ALPHATHETA").font(.system(size: 10)).foregroundStyle(Color(white: 0.4))
             }
-            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 4)
+            .padding(.horizontal, 12).padding(.top, 6)
             
-            ScrollView([.horizontal, .vertical]) {
-                VStack(spacing: 0) {
-                    HStack(spacing: 0) {
-                        ForEach(Array(engine.channels.enumerated()), id: \.element.id) { i, ch in
-                            ChannelStripView(channel: ch, index: i, engine: engine)
-                            if i < 3 { Divider().frame(width: 2).background(Color(white: 0.15)) }
-                        }
-                    }
-                    Divider().background(Color(white: 0.15))
-                    BottomSection(engine: engine)
+            HStack(spacing: 0) {
+                ForEach(Array(engine.channels.enumerated()), id: \.element.id) { i, ch in
+                    ChannelStripView(channel: ch, index: i, engine: engine)
+                    if i < 3 { Divider().frame(width: 1).background(Color(white: 0.15)) }
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
+            
+            Divider().background(Color(white: 0.15))
+            BottomSection(engine: engine)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(white: 0.1))
         .preferredColorScheme(.dark)
     }
@@ -544,13 +534,11 @@ struct BottomSection: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            BeatFXView(engine: engine).frame(width: 280)
-            Divider().background(Color(white: 0.15))
             CrossfaderView(engine: engine).frame(maxWidth: .infinity)
             Divider().background(Color(white: 0.15))
             MasterSection(engine: engine).frame(width: 180)
         }
-        .frame(height: 90).padding(4)
+        .frame(height: 60).padding(4)
         .background(Color(white: 0.08))
     }
 }
