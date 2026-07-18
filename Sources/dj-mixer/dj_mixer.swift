@@ -33,13 +33,13 @@ import AVFoundation
     var masterVolume: Float = 0.85
     var boothVolume: Float = 0.5
     var masterMixer = AVAudioMixerNode()
-    var fx: BeatFXProcessor?
+    var fx: BeatFXProcessor
     
     // Beat FX state
-    var fxType: FXType = .delay
-    var fxParam: Float = 0.5
+    var fxType: FXType = .delay { didSet { updateMix() } }
+    var fxParam: Float = 0.5 { didSet { updateMix() } }
     var fxBeat: FXBeat = .quarter
-    var fxOn = false
+    var fxOn = false { didSet { updateMix() } }
     var fxChannels: [Bool] = [false, false, false, false]
     
     // Peak meters
@@ -50,8 +50,10 @@ import AVFoundation
     var library = LibraryManager.default.load()
     
     init() {
+        fx = BeatFXProcessor(engine: avEngine)
         avEngine.attach(masterMixer)
-        avEngine.connect(masterMixer, to: avEngine.outputNode, format: nil)
+        avEngine.connect(masterMixer, to: fx.inputMixer, format: nil)
+        avEngine.connect(fx.outputMixer, to: avEngine.outputNode, format: nil)
         for ch in channels { ch.attach(to: avEngine, master: masterMixer) }
         for ch in channels { ch.onUpdate = { [weak self] in self?.updateMix() } }
         for ch in channels {
@@ -80,6 +82,7 @@ import AVFoundation
     func updateMix() {
         for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
         masterMixer.volume = masterVolume
+        fx.apply(type: fxType, param: fxParam, beat: fxBeat, on: fxOn)
     }
     
     func startMeterTimer() {
@@ -100,63 +103,62 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
 
 @Observable class BeatFXProcessor {
     let engine: AVAudioEngine
-    let reverb = AVAudioUnitReverb()
+    let inputMixer = AVAudioMixerNode()
+    let outputMixer = AVAudioMixerNode()
     let delay = AVAudioUnitDelay()
+    let reverb = AVAudioUnitReverb()
     let distortion = AVAudioUnitDistortion()
-    var currentType: FXType = .delay
     
     init(engine: AVAudioEngine) {
         self.engine = engine
-        engine.attach(reverb)
+        engine.attach(inputMixer)
+        engine.attach(outputMixer)
         engine.attach(delay)
+        engine.attach(reverb)
         engine.attach(distortion)
-        reverb.loadFactoryPreset(.cathedral)
-        delay.feedback = 30
-        delay.lowPassCutoff = 15000
+        // Series: input → delay → reverb → distortion → output
+        engine.connect(delay, to: reverb, format: nil)
+        engine.connect(reverb, to: distortion, format: nil)
+        engine.connect(distortion, to: outputMixer, format: nil)
         delay.wetDryMix = 0
-        distortion.loadFactoryPreset(.drumsLoFi)
-        bypassAll()
-    }
-    
-    var onUpdate: (() -> Void)?
-    
-    func bypassAll() {
         reverb.wetDryMix = 0
-        delay.wetDryMix = 0
         distortion.wetDryMix = 0
+        delay.lowPassCutoff = 15000
+        reverb.loadFactoryPreset(.cathedral)
+        distortion.loadFactoryPreset(.drumsLoFi)
     }
     
-    func apply(type: FXType, param: Float, beat: FXBeat) {
-        let beatMs: [FXBeat: Double] = [.whole: 2000, .half: 1000, .quarter: 500, .eighth: 250, .sixteenth: 125]
-        currentType = type
+    func apply(type: FXType, param: Float, beat: FXBeat, on: Bool) {
+        let beatMs: Double = [.whole: 2000, .half: 1000, .quarter: 500, .eighth: 250, .sixteenth: 125][beat] ?? 500
+        let wet = on ? param : 0
+        
+        delay.wetDryMix = 0
+        reverb.wetDryMix = 0
+        distortion.wetDryMix = 0
+        
         switch type {
         case .delay, .echo:
-            delay.delayTime = beatMs[beat] ?? 500
+            delay.delayTime = beatMs / 1000.0
             delay.feedback = Float(param) * 80
-            delay.wetDryMix = Float(param) * 50
-            reverb.wetDryMix = 0
-            distortion.wetDryMix = 0
+            delay.wetDryMix = Float(wet) * 50
         case .reverb:
-            reverb.wetDryMix = Float(param) * 60
-            delay.wetDryMix = 0; distortion.wetDryMix = 0
+            reverb.wetDryMix = Float(wet) * 60
         case .flanger:
-            distortion.wetDryMix = 0; reverb.wetDryMix = 0; delay.wetDryMix = 0
-            delay.delayTime = 3.0; delay.feedback = Float(param) * 40; delay.wetDryMix = Float(param) * 50
+            delay.delayTime = 0.003
+            delay.feedback = Float(param) * 60
+            delay.wetDryMix = Float(wet) * 50
         case .phaser:
-            distortion.wetDryMix = 0; reverb.wetDryMix = 0; delay.wetDryMix = 0
             distortion.loadFactoryPreset(.drumsLoFi)
-            distortion.wetDryMix = Float(param) * 50
+            distortion.wetDryMix = Float(wet) * 50
         case .filter:
             delay.lowPassCutoff = Float(param) * 20000 + 100
-            delay.wetDryMix = 100; reverb.wetDryMix = 0; distortion.wetDryMix = 0
+            delay.wetDryMix = Float(wet) * 100
         case .crush:
             distortion.loadFactoryPreset(.drumsLoFi)
-            distortion.wetDryMix = Float(param) * 60
-            reverb.wetDryMix = 0; delay.wetDryMix = 0
+            distortion.wetDryMix = Float(wet) * 60
         case .space:
             reverb.loadFactoryPreset(.largeHall)
-            reverb.wetDryMix = Float(param) * 70
-            delay.wetDryMix = 0; distortion.wetDryMix = 0
+            reverb.wetDryMix = Float(wet) * 70
         }
     }
 }
@@ -712,6 +714,8 @@ struct BottomSection: View {
     
     var body: some View {
         HStack(spacing: 0) {
+            BeatFXView(engine: engine).frame(width: 260)
+            Divider().background(Color(white: 0.15))
             CrossfaderView(engine: engine).frame(maxWidth: .infinity)
             Divider().background(Color(white: 0.15))
             MasterSection(engine: engine).frame(width: 180)
@@ -725,40 +729,24 @@ struct BeatFXView: View {
     @Bindable var engine: AudioEngine
     
     var body: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text("BEAT FX").font(.system(size: 9, weight: .bold)).foregroundStyle(.blue)
-                    Button(engine.fxOn ? "ON" : "OFF") { engine.fxOn.toggle(); engine.updateMix() }
-                        .buttonStyle(.bordered).tint(engine.fxOn ? .green : .gray).font(.system(size: 8))
+                    Button(engine.fxOn ? "ON" : "OFF") { engine.fxOn.toggle() }
+                        .buttonStyle(.bordered).tint(engine.fxOn ? .green : .gray).font(.system(size: 8)).controlSize(.mini)
                 }
-                HStack(spacing: 6) {
-                    VStack(spacing: 1) {
-                        Text("TYPE").font(.system(size: 7)).foregroundStyle(.secondary)
-                        Picker("", selection: $engine.fxType) {
-                            ForEach(FXType.allCases, id: \.self) { t in Text(t.rawValue.uppercased()).font(.system(size: 9)).tag(t) }
-                        }.pickerStyle(.menu).frame(width: 70)
-                    }
-                    VStack(spacing: 1) {
-                        Text("PARAM").font(.system(size: 7)).foregroundStyle(.secondary)
-                        DialKnob(value: $engine.fxParam, range: 0...1).frame(width: 26, height: 26)
-                            .onChange(of: engine.fxParam) { _, _ in engine.updateMix() }
-                    }
-                    VStack(spacing: 1) {
-                        Text("BEAT").font(.system(size: 7)).foregroundStyle(.secondary)
-                        Picker("", selection: $engine.fxBeat) {
-                            ForEach(FXBeat.allCases, id: \.self) { b in Text(b.rawValue).font(.system(size: 9)).tag(b) }
-                        }.pickerStyle(.menu).frame(width: 60)
-                    }
+                HStack(spacing: 4) {
+                    Picker("", selection: $engine.fxType) {
+                        ForEach(FXType.allCases, id: \.self) { t in Text(t.rawValue.uppercased()).font(.system(size: 8)).tag(t) }
+                    }.pickerStyle(.menu).frame(width: 70)
+                    DialKnob(value: $engine.fxParam, range: 0...1).frame(width: 22, height: 22)
+                    Picker("", selection: $engine.fxBeat) {
+                        ForEach(FXBeat.allCases, id: \.self) { b in Text(b.rawValue).font(.system(size: 8)).tag(b) }
+                    }.pickerStyle(.menu).frame(width: 55)
                 }
             }
-            VStack(spacing: 4) {
-                ForEach(0..<4) { i in
-                    Button("CH\(i+1)") { engine.fxChannels[i].toggle() }
-                        .buttonStyle(.bordered).tint(engine.fxChannels[i] ? .blue : .gray).font(.system(size: 8))
-                }
-            }
-        }.padding(6)
+        }.padding(4)
     }
 }
 
