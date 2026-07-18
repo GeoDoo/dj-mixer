@@ -10,7 +10,11 @@ import AVFoundation
                 .frame(minWidth: 800, minHeight: 500)
                 .onAppear {
                     engine.start()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NSApplication.shared.setActivationPolicy(.regular)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if let w = NSApplication.shared.windows.first {
+                            w.makeKeyAndOrderFront(nil)
+                        }
                         NSApplication.shared.activate(ignoringOtherApps: true)
                     }
                 }
