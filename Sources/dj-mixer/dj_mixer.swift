@@ -198,7 +198,6 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var fileName: String = ""
     var onUpdate: (() -> Void)?
     var onLoad: ((TrackRecord) -> Void)?
-    private var amp: Float = 0
     
     var displayName: String {
         fileName.isEmpty ? "CH \(id + 1)" : fileName
@@ -222,11 +221,22 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
         engine.connect(trimMixer, to: channelMixer, format: nil)
         engine.connect(channelMixer, to: master, format: nil)
         engine.connect(cueMixer, to: master, format: nil)
+        // Real level metering via tap on the channel mixer
+        let fmt = engine.outputNode.outputFormat(forBus: 0)
+        channelMixer.installTap(onBus: 0, bufferSize: 256, format: fmt) { [weak self] buf, _ in
+            guard let s = self, let d = buf.floatChannelData?[0] else { return }
+            var pk: Float = 0
+            for i in 0..<Int(buf.frameLength) { pk = max(pk, abs(d[i])) }
+            s.meterVal = min(pk * 2, 1)
+        }
     }
     
+    private var meterVal: Float = 0
+    
+    func meter() -> Float { meterVal }
+    
     func applyMix(crossfader: Float, curve _: Float) {
-        let c = fader  // 0-1 channel fader
-        // crossfader apply
+        let c = fader
         var xfGain: Float = 1
         if xfaderAssign == -1 { xfGain = 1 }
         else if xfaderAssign == 0 { xfGain = (1 - crossfader) * 2 }
@@ -234,15 +244,6 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
         channelMixer.volume = trim * c * xfGain
         cueMixer.volume = cueOn ? 0.8 : 0
     }
-    
-    func meter() -> Float {
-        guard let nodeTime = player.lastRenderTime,
-              let playerTime = player.playerTime(forNodeTime: nodeTime) else { return 0 }
-        // Simple peak simulation based on amplitude
-        amp = amp * 0.9 + (isPlaying ? 0.1 * Float.random(in: 0...0.3) : 0)
-        return min(amp, 1)
-    }
-    
     func load(url: URL) {
         let startScoped = url.startAccessingSecurityScopedResource()
         defer { if startScoped { url.stopAccessingSecurityScopedResource() } }
