@@ -80,6 +80,7 @@ import AVFoundation
     }
     
     func updateMix() {
+        for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
         masterMixer.volume = masterVolume
         fx.on = fxOn
         // Effective BPM per channel: override or detected
@@ -95,18 +96,6 @@ import AVFoundation
         }
         masterBPM = effBPM
         fx.apply(type: fxType, param: fxParam, beat: fxBeat, bpm: effBPM)
-        // Sync playback speed per channel
-        for ch in channels {
-            ch.timePitch.pitch = 0
-            ch.timePitch.bypass = false
-            let d = ch.bpm
-            if d > 0 && ch.bpmOverride >= 0 {
-                ch.timePitch.rate = ch.bpmOverride / Float(d)
-            } else {
-                ch.timePitch.rate = 1.0
-            }
-            ch.applyMix(crossfader: crossfader, curve: crossfaderCurve)
-        }
     }
     
     func startMeterTimer() {
@@ -175,7 +164,6 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
 @Observable class Channel: Identifiable {
     let id: Int
     var player = AVAudioPlayerNode()
-    let timePitch = AVAudioUnitTimePitch()
     var eq: AVAudioUnitEQ
     var trimMixer = AVAudioMixerNode()
     var channelMixer = AVAudioMixerNode()
@@ -217,7 +205,6 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     init(id: Int) {
         self.id = id
         eq = AVAudioUnitEQ(numberOfBands: 3)
-        timePitch.overlap = 8; timePitch.pitch = 0; timePitch.rate = 1.0
         let cfgs: [(AVAudioUnitEQFilterType, Float, Float)] = [(.highShelf, 7000, 0.5), (.parametric, 1200, 0.7), (.lowShelf, 200, 0.5)]
         for (i, (t, f, b)) in cfgs.enumerated() {
             eq.bands[i].filterType = t; eq.bands[i].frequency = f
@@ -227,9 +214,9 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     }
     
     func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
-        engine.attach(player); engine.attach(timePitch); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
-        engine.connect(player, to: timePitch, format: nil)
-        engine.connect(timePitch, to: eq, format: nil)
+        engine.attach(player); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
+        engine.connect(player, to: eq, format: nil)
+        engine.connect(eq, to: trimMixer, format: nil)
         engine.connect(trimMixer, to: channelMixer, format: nil)
         engine.connect(channelMixer, to: master, format: nil)
         engine.connect(cueMixer, to: master, format: nil)
@@ -240,14 +227,13 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             for i in 0..<Int(buf.frameLength) { pk = max(pk, abs(d[i])) }
             s.meterVal = min(pk * 2, 1)
         }
-        timePitch.bypass = false
     }
     
     private var meterVal: Float = 0
     
     func meter() -> Float { meterVal }
     
-    func applyMix(crossfader: Float, curve _: Float, rateComp: Float = 1.0) {
+    func applyMix(crossfader: Float, curve _: Float) {
         let c = fader
         var xfGain: Float = 1
         if xfaderAssign == -1 { xfGain = 1 }
