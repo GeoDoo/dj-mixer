@@ -27,8 +27,6 @@
       </div>
     </div>
     <div class="sub" id="info-a">Load a track to begin</div>
-    <input class="spotify-input" id="spotify-a" placeholder="Paste Spotify track URL">
-    <div class="spotify-embed" id="embed-a"></div>
   </div>
   <div class="crossfader-section">
     <label>A</label>
@@ -56,8 +54,6 @@
       </div>
     </div>
     <div class="sub" id="info-b">Load a track to begin</div>
-    <input class="spotify-input" id="spotify-b" placeholder="Paste Spotify track URL">
-    <div class="spotify-embed" id="embed-b"></div>
   </div>
 </div>
 <script>
@@ -297,19 +293,6 @@ document.addEventListener('keydown',e=>{
 });
 document.getElementById('deck-a').style.outline='2px solid var(--focus)';
 setFader(0.5);
-
-/* ---- Spotify embed ---- */
-function spotifyHandler(id){
-  const input=document.getElementById('spotify-'+id);
-  const embed=document.getElementById('embed-'+id);
-  input.onchange=()=>{
-    const match=input.value.match(/track[\/?](\w+)/);
-    if(match)embed.innerHTML='<iframe src=\"https://open.spotify.com/embed/track/'+match[1]+'?utm_source=dj-mixer\" width=\"100%\" height=\"152\" frameBorder=\"0\" allow=\"autoplay; clipboard-write; encrypted-media; fullscreen\" loading=\"lazy\" style=\"border-radius:12px\"></iframe>';
-    else embed.innerHTML='';
-  };
-  input.onpaste=()=>setTimeout(input.onchange,50);
-}
-spotifyHandler('a');spotifyHandler('b');
 </script>
 </body>
 </html>
