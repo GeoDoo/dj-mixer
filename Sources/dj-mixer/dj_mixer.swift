@@ -46,11 +46,27 @@ import AVFoundation
     var channelPeaks: [Float] = [0, 0, 0, 0]
     var masterPeak: Float = 0
     
+    // Library
+    var library = LibraryManager.default.load()
+    
     init() {
         avEngine.attach(masterMixer)
         avEngine.connect(masterMixer, to: avEngine.outputNode, format: nil)
         for ch in channels { ch.attach(to: avEngine, master: masterMixer) }
         for ch in channels { ch.onUpdate = { [weak self] in self?.updateMix() } }
+        for ch in channels {
+            ch.onLoad = { [weak self] rec in
+                guard let s = self else { return }
+                if !s.library.tracks.contains(where: { $0.id == rec.id }) {
+                    s.library.tracks.insert(rec, at: 0)
+                }
+                s.saveLibrary()
+            }
+        }
+    }
+    
+    func saveLibrary() {
+        LibraryManager.default.save(library)
     }
     
     func start() {
@@ -177,6 +193,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var waveform: [Float] = []
     var fileName: String = ""
     var onUpdate: (() -> Void)?
+    var onLoad: ((TrackRecord) -> Void)?
     private var amp: Float = 0
     private var scopeURL: URL?
     
@@ -232,6 +249,9 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             currentFile = file; fileName = url.lastPathComponent
             duration = TimeInterval(file.length) / file.fileFormat.sampleRate
             computeWaveform(file: file); pausedAt = 0
+            if let rec = TrackRecord.from(url: url, duration: duration) {
+                onLoad?(rec)
+            }
         } catch { print("CH\(id) load: \(error)") }
     }
     
@@ -313,12 +333,15 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
 // MARK: - Views
 struct ContentView: View {
     @Bindable var engine: AudioEngine
+    @State private var showLibrary = false
     
     var body: some View {
         VStack(spacing: 4) {
             HStack {
                 Text("DJM-TOUR1").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(white: 0.7))
                 Spacer()
+                Button("LIBRARY (\(engine.library.tracks.count))") { showLibrary.toggle() }
+                    .buttonStyle(.bordered).tint(.gray).font(.system(size: 9)).controlSize(.small)
                 Text("ALPHATHETA").font(.system(size: 10)).foregroundStyle(Color(white: 0.4))
             }
             .padding(.horizontal, 12).padding(.top, 6)
@@ -337,6 +360,9 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(white: 0.1))
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showLibrary) {
+            LibraryView(engine: engine)
+        }
     }
 }
 
@@ -512,6 +538,50 @@ struct WaveformMini: View {
                 .onTapGesture { loc in let w = geo.size.width; if w > 0 { onTap(loc.x / w) } }
             }
         }
+    }
+}
+
+struct LibraryView: View {
+    @Bindable var engine: AudioEngine
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("LIBRARY").font(.headline).foregroundStyle(Color(white: 0.8))
+                Text("(\(engine.library.tracks.count) tracks)").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Close") { dismiss() }.buttonStyle(.bordered).controlSize(.small)
+            }.padding()
+            
+            if engine.library.tracks.isEmpty {
+                Text("No tracks in library. Load a track into any channel to add it.")
+                    .font(.body).foregroundStyle(.secondary).padding()
+                Spacer()
+            } else {
+                List(engine.library.tracks) { track in
+                    HStack {
+                        Text(track.name).font(.body)
+                        Spacer()
+                        Text(String(format: "%.0fs", track.duration)).font(.caption).foregroundStyle(.secondary)
+                        Text(track.added, style: .date).font(.caption2).foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        // Load track into first available channel
+                        if let url = track.resolveURL() {
+                            _ = url.startAccessingSecurityScopedResource()
+                            engine.channels[0].load(url: url)
+                            dismiss()
+                        }
+                    }
+                }
+                .frame(minWidth: 400, minHeight: 300)
+            }
+        }
+        .frame(width: 500, height: 400)
+        .background(Color(white: 0.12))
+        .preferredColorScheme(.dark)
     }
 }
 
