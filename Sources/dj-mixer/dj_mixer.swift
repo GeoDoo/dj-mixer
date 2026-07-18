@@ -57,10 +57,12 @@ import AVFoundation
         for ch in channels {
             ch.onLoad = { [weak self] rec in
                 guard let s = self else { return }
-                if !s.library.tracks.contains(where: { $0.id == rec.id }) {
-                    s.library.tracks.insert(rec, at: 0)
+                var newLib = s.library
+                if !newLib.tracks.contains(where: { $0.id == rec.id }) {
+                    newLib.tracks.insert(rec, at: 0)
                 }
-                s.saveLibrary()
+                s.library = newLib
+                LibraryManager.default.save(newLib)
             }
         }
     }
