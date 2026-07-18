@@ -41,11 +41,10 @@ struct TrackRecord: Codable, Identifiable, Hashable {
     
     func resolveURL() -> URL? {
         var stale = false
-        let url = try? URL(resolvingBookmarkData: bookmarkData,
-                           options: .withSecurityScope,
-                           relativeTo: nil,
-                           bookmarkDataIsStale: &stale)
-        return stale ? nil : url
+        return try? URL(resolvingBookmarkData: bookmarkData,
+                        options: .withSecurityScope,
+                        relativeTo: nil,
+                        bookmarkDataIsStale: &stale)
     }
     
     static func from(url: URL, duration: TimeInterval) -> Self? {
