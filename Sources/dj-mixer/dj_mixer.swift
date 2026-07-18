@@ -81,9 +81,6 @@ import AVFoundation
     func reconnectChannel(_ id: Int) {
         let ch = channels[id]
         guard ch.currentFile != nil else { return }
-        avEngine.disconnectNodeInput(ch.eq)
-        avEngine.connect(ch.player, to: ch.timePitch, format: nil)
-        avEngine.connect(ch.timePitch, to: ch.eq, format: nil)
         ch.timePitch.bypass = false; ch.timePitch.pitch = 0
         ch.timePitch.rate = ch.bpmOverride >= 0 && ch.bpm > 0 ? ch.bpmOverride / Float(ch.bpm) : 1.0
         updateMix()
@@ -240,7 +237,8 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     
     func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
         engine.attach(player); engine.attach(timePitch); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
-        engine.connect(player, to: eq, format: nil)
+        engine.connect(player, to: timePitch, format: nil)
+        engine.connect(timePitch, to: eq, format: nil)
         engine.connect(eq, to: trimMixer, format: nil)
         engine.connect(trimMixer, to: channelMixer, format: nil)
         engine.connect(channelMixer, to: master, format: nil)
