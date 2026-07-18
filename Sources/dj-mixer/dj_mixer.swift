@@ -91,7 +91,7 @@ import AVFoundation
         } else {
             effBPM = loaded.reduce(0.0) { sum, ch in
                 let detected = ch.bpm
-                return sum + (ch.bpmOverride > 0 ? Double(ch.bpmOverride) : detected)
+                return sum + (ch.bpmOverride >= 0 ? Double(ch.bpmOverride) : detected)
             } / Double(loaded.count)
         }
         masterBPM = effBPM
@@ -99,7 +99,7 @@ import AVFoundation
         // Sync playback speed per channel
         for ch in channels {
             let detected = ch.bpm
-            if detected > 0 && ch.bpmOverride > 0 {
+            if detected > 0 && ch.bpmOverride >= 0 {
                 ch.varispeed.rate = ch.bpmOverride / Float(detected)
             } else {
                 ch.varispeed.rate = 1.0
@@ -204,7 +204,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var cueSet = false
     var waveform: [Float] = []
     var fileName: String = ""
-    var bpmOverride: Float = 0  // 0 = use detected BPM
+    var bpmOverride: Float = -1  // -1 = use detected BPM
     var onUpdate: (() -> Void)?
     var onLoad: ((TrackRecord) -> Void)?
     
