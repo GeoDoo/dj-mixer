@@ -157,6 +157,7 @@ function makeDeck(id,canvasId){
   playBtn.onclick=togglePlay;
   cueBtn.onclick=()=>{
     if(!buf)return;
+    if(!playing&&cueSet){stopPlay();pausePos=cuePoint;startPlay(pausePos);drawWave();return;}
     if(playing)cuePoint=pausePos+ctx.currentTime-startTime;
     else cuePoint=pausePos;
     cueSet=true;cueBtn.classList.add('active');drawWave();
