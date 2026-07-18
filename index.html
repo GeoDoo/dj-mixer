@@ -8,6 +8,9 @@
 </head>
 <body>
 <div class="mixer">
+  <div style="position:absolute;top:12px;right:12px">
+    <button class="ctrl-btn-sm" id="theme-btn" onclick="document.body.classList.toggle('light');this.textContent=document.body.classList.contains('light')?'☀':'☾'" title="Toggle theme">☾</button>
+  </div>
   <div class="deck" id="deck-a">
     <div class="deck-header"><span>Deck A</span><span class="kbd">1</span></div>
     <label class="file-label" id="label-a">Load Track</label>
