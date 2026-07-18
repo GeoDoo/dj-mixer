@@ -174,7 +174,10 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var xfaderAssign: Int = 0
     
     var isPlaying = false { didSet { isPlaying ? startPlay() : stopPlay() } }
-    var currentFile: AVAudioFile? { didSet { player.stop(); isPlaying = false; pausedAt = 0 } }
+    var currentFile: AVAudioFile? { didSet { 
+        if currentFile == nil { scopeURL?.stopAccessingSecurityScopedResource(); scopeURL = nil }
+        player.stop(); isPlaying = false; pausedAt = 0 
+    } }
     var pausedAt: TimeInterval = 0
     var duration: TimeInterval = 0
     var currentTime: TimeInterval = 0
@@ -184,6 +187,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var fileName: String = ""
     var onUpdate: (() -> Void)?
     private var amp: Float = 0
+    private var scopeURL: URL?
     
     var displayName: String {
         fileName.isEmpty ? "CH \(id + 1)" : fileName
@@ -229,7 +233,8 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     
     func load(url: URL) {
         _ = url.startAccessingSecurityScopedResource()
-        defer { url.stopAccessingSecurityScopedResource() }
+        scopeURL?.stopAccessingSecurityScopedResource()
+        scopeURL = url
         do {
             let file = try AVAudioFile(forReading: url)
             currentFile = file; fileName = url.lastPathComponent
