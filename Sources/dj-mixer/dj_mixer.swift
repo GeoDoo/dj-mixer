@@ -763,6 +763,7 @@ struct BeatFXView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text("BEAT FX").font(.system(size: 9, weight: .bold)).foregroundStyle(.blue)
+                    Text("\(Int(engine.masterBPM)) BPM").font(.system(size: 8)).foregroundStyle(.secondary)
                     Button(engine.fxOn ? "ON" : "OFF") { engine.fxOn.toggle() }
                         .buttonStyle(.bordered).tint(engine.fxOn ? .green : .gray).font(.system(size: 8)).controlSize(.mini)
                 }
