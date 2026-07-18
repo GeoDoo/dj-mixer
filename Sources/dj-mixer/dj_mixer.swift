@@ -792,13 +792,10 @@ struct BeatFXView: View {
                         ForEach(FXBeat.allCases, id: \.self) { b in Text(b.rawValue).font(.system(size: 8)).tag(b) }
                     }.pickerStyle(.menu).frame(width: 55)
                     Text("BPM").font(.system(size: 7)).foregroundStyle(.secondary)
-                    let bpmBinding = Binding<Int>(
-                        get: { Int(engine.bpmOverride > 0 ? engine.bpmOverride : engine.masterBPM) },
-                        set: { engine.bpmOverride = Float($0) }
-                    )
-                    TextField("", value: bpmBinding, formatter: NumberFormatter())
+                    TextField("BPM", value: $engine.bpmOverride, format: .number)
                         .textFieldStyle(.plain).font(.system(size: 9)).multilineTextAlignment(.center)
-                        .frame(width: 36).padding(2).background(Color(white: 0.15)).cornerRadius(3)
+                        .frame(width: 40).padding(2).background(Color(white: 0.15)).cornerRadius(3)
+                        .onChange(of: engine.bpmOverride) { _, _ in engine.updateMix() }
                     if engine.bpmOverride > 0 {
                         Button("✕") { engine.bpmOverride = 0 }
                             .buttonStyle(.borderless).font(.system(size: 7)).foregroundStyle(.red)
