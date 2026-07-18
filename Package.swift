@@ -5,6 +5,7 @@ let package = Package(
     name: "dj-mixer",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "dj-mixer", path: "Sources/dj-mixer")
+        .executableTarget(name: "dj-mixer", path: "Sources/dj-mixer"),
+        .testTarget(name: "dj-mixerTests", dependencies: ["dj-mixer"], path: "Tests/dj-mixerTests")
     ]
 )
