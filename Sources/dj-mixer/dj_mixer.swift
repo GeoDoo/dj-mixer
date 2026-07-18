@@ -58,8 +58,8 @@ import AVFoundation
             ch.onLoad = { [weak self] rec in
                 guard let s = self else { return }
                 var newLib = s.library
-                // dedupe by bookmark data (same file)
-                if !newLib.tracks.contains(where: { $0.bookmarkData == rec.bookmarkData }) {
+                // dedupe by local path
+                if !newLib.tracks.contains(where: { $0.localPath == rec.localPath }) {
                     newLib.tracks.insert(rec, at: 0)
                 }
                 s.library = newLib
@@ -185,7 +185,6 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     
     var isPlaying = false { didSet { isPlaying ? startPlay() : stopPlay() } }
     var currentFile: AVAudioFile? { didSet { 
-        if currentFile == nil { scopeURL?.stopAccessingSecurityScopedResource(); scopeURL = nil }
         player.stop(); isPlaying = false; pausedAt = 0 
     } }
     var pausedAt: TimeInterval = 0
@@ -198,7 +197,6 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var onUpdate: (() -> Void)?
     var onLoad: ((TrackRecord) -> Void)?
     private var amp: Float = 0
-    private var scopeURL: URL?
     
     var displayName: String {
         fileName.isEmpty ? "CH \(id + 1)" : fileName
@@ -244,31 +242,30 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     }
     
     func load(url: URL) {
-        _ = url.startAccessingSecurityScopedResource()
-        scopeURL?.stopAccessingSecurityScopedResource()
-        scopeURL = url
+        let startScoped = url.startAccessingSecurityScopedResource()
+        defer { if startScoped { url.stopAccessingSecurityScopedResource() } }
+        // ingest into local samples dir
+        var loadURL = url
+        if let rec = LibraryManager.default.ingest(url: url) {
+            loadURL = URL(fileURLWithPath: rec.localPath)
+            onLoad?(rec)
+        }
         do {
-            let file = try AVAudioFile(forReading: url)
-            currentFile = file; fileName = url.lastPathComponent
+            let file = try AVAudioFile(forReading: loadURL)
+            currentFile = file; fileName = loadURL.lastPathComponent
             duration = TimeInterval(file.length) / file.fileFormat.sampleRate
             computeWaveform(file: file); pausedAt = 0
-            if let rec = TrackRecord.from(url: url, duration: duration) {
-                onLoad?(rec)
-            }
         } catch { print("CH\(id) load: \(error)") }
     }
     
     func loadFromLibrary(track: TrackRecord) {
-        guard let url = track.resolveURL() else { return }
-        scopeURL?.stopAccessingSecurityScopedResource()
-        guard url.startAccessingSecurityScopedResource() else { return }
-        scopeURL = url
+        guard let url = track.url else { return }
         do {
             let file = try AVAudioFile(forReading: url)
             currentFile = file; fileName = track.name
             duration = track.duration
             computeWaveform(file: file); pausedAt = 0
-        } catch { print("CH\(id) lib load: \(error)") }
+        } catch { print("CH\(id) lib: \(error)") }
     }
     
     func computeWaveform(file: AVAudioFile) {
@@ -595,11 +592,8 @@ struct LibraryView: View {
                         HStack(spacing: 2) {
                             ForEach(0..<4) { i in
                                 Button("CH\(i+1)") {
-                                    if let url = track.resolveURL() {
-                                        _ = url.startAccessingSecurityScopedResource()
-                                        engine.channels[i].load(url: url)
-                                        dismiss()
-                                    }
+                                    engine.channels[i].loadFromLibrary(track: track)
+                                    dismiss()
                                 }
                                 .buttonStyle(.bordered).tint(.gray).font(.system(size: 8)).controlSize(.mini)
                             }

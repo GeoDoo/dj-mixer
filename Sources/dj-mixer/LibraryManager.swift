@@ -1,20 +1,32 @@
 import Foundation
+import AVFoundation
 
-// MARK: - Library Persistence
+// MARK: - Library Persistence (file copy — no security-scoped bookmarks)
+
+private let fm = FileManager.default
+
+private var appDir: URL {
+    let d = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        .appendingPathComponent("dj-mixer", isDirectory: true)
+    try? fm.createDirectory(at: d, withIntermediateDirectories: true)
+    return d
+}
+
+private var samplesDir: URL {
+    let d = appDir.appendingPathComponent("samples", isDirectory: true)
+    try? fm.createDirectory(at: d, withIntermediateDirectories: true)
+    return d
+}
+
+private var metaURL: URL {
+    appDir.appendingPathComponent("library.json")
+}
 
 struct LibraryManager {
     static let `default` = LibraryManager()
     
-    private var libraryURL: URL {
-        let fm = FileManager.default
-        let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("dj-mixer")
-        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("library.json")
-    }
-    
     func load() -> Library {
-        guard let data = try? Data(contentsOf: libraryURL),
+        guard let data = try? Data(contentsOf: metaURL),
               let lib = try? JSONDecoder().decode(Library.self, from: data) else {
             return Library()
         }
@@ -23,7 +35,35 @@ struct LibraryManager {
     
     func save(_ library: Library) {
         guard let data = try? JSONEncoder().encode(library) else { return }
-        try? data.write(to: libraryURL, options: .atomic)
+        try? data.write(to: metaURL, options: .atomic)
+    }
+    
+    /// Copy an audio file into the samples directory for permanent storage.
+    /// Returns the TrackRecord with the local path as the identifier.
+    func ingest(url: URL) -> TrackRecord? {
+        let ext = url.pathExtension.isEmpty ? "mp3" : url.pathExtension
+        let trackId = UUID()
+        let dest = samplesDir.appendingPathComponent("\(trackId.uuidString).\(ext)")
+        do {
+            try fm.copyItem(at: url, to: dest)
+        } catch {
+            // If copy fails (e.g. cross-device), try coordinate reading
+            do {
+                let data = try Data(contentsOf: url)
+                try data.write(to: dest)
+            } catch {
+                print("ingest fail: \(error)")
+                return nil
+            }
+        }
+        
+        // get duration
+        let comp = AVURLAsset(url: dest).duration
+        let dur = CMTimeGetSeconds(comp)
+        
+        return TrackRecord(id: trackId, name: url.lastPathComponent,
+                          localPath: dest.path, duration: dur.isNaN ? 0 : dur,
+                          added: Date())
     }
 }
 
@@ -35,24 +75,13 @@ struct Library: Codable {
 struct TrackRecord: Codable, Identifiable, Hashable {
     var id: UUID
     var name: String
-    var bookmarkData: Data  // security-scoped bookmark
+    var localPath: String  // path to the copy in samples dir
     var duration: TimeInterval
     var added: Date
     
-    func resolveURL() -> URL? {
-        var stale = false
-        return try? URL(resolvingBookmarkData: bookmarkData,
-                        options: .withSecurityScope,
-                        relativeTo: nil,
-                        bookmarkDataIsStale: &stale)
-    }
-    
-    static func from(url: URL, duration: TimeInterval) -> Self? {
-        guard let data = try? url.bookmarkData(options: .withSecurityScope,
-                                                includingResourceValuesForKeys: nil,
-                                                relativeTo: nil) else { return nil }
-        return TrackRecord(id: UUID(), name: url.lastPathComponent,
-                          bookmarkData: data, duration: duration, added: Date())
+    var url: URL? {
+        let u = URL(fileURLWithPath: localPath)
+        return fm.isReadableFile(atPath: localPath) ? u : nil
     }
 }
 
