@@ -53,6 +53,13 @@
     <div class="sub" id="info-b">Load a track to begin</div>
   </div>
 </div>
+<div id="library">
+  <div class="lib-header"><span>Library</span>
+    <button class="ctrl-btn-sm" id="lib-upload">+ Upload</button>
+    <input type="file" id="lib-file" accept="audio/*,.mp4,.m4a" multiple hidden>
+  </div>
+  <div class="lib-tracks" id="lib-tracks"><span class="lib-empty">No tracks uploaded. Click +Upload to add music.</span></div>
+</div>
 <script>
 const ctx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -182,11 +189,12 @@ function makeDeck(id,canvasId){
     else raf=null;
   }
 
-  return {gain,eqLo,eqMid,eqHi,deck:id,buf:()=>buf,pausePos:()=>pausePos,togglePlay,stopPlay,startPlay,cuePoint:()=>cuePoint};
+  return {gain,eqLo,eqMid,eqHi,deck:id,buf:()=>buf,pausePos:()=>pausePos,togglePlay,stopPlay,startPlay,cuePoint:()=>cuePoint,loadFile};
 }
 
 const a=makeDeck('a','wave-a');
 const b=makeDeck('b','wave-b');
+window.a=a;window.b=b;
 
 /* ---- faders ---- */
 document.querySelectorAll('.eq-fader').forEach(f=>{
@@ -271,6 +279,38 @@ document.addEventListener('keydown',e=>{
 });
 document.getElementById('deck-a').style.outline='2px solid var(--focus)';
 setFader(0.5);
+
+/* ---- Library (playlist panel) ---- */
+const BASE = location.port === '8767' ? '' : '';
+async function loadLib(){
+  try{
+    const r=await fetch(BASE+'/api/tracks');
+    if(!r.ok){document.getElementById('lib-tracks').innerHTML='<span class="lib-empty">Backend not running — start: python3 backend.py</span>';return}
+    const tracks=await r.json();
+    const el=document.getElementById('lib-tracks');
+    if(!tracks.length){el.innerHTML='<span class="lib-empty">No tracks. Click +Upload to add music.</span>';return}
+    el.innerHTML=tracks.map(t=>'<div class="lib-track" data-id="'+t.id+'" data-name="'+t.name.replace(/'/g,"\\'")+'">'+
+      '<span class="name">'+t.name+'</span><span class="meta">'+(t.duration?Math.round(t.duration)+'s':'')+'</span></div>').join('');
+    el.querySelectorAll('.lib-track').forEach(div=>{
+      div.onclick=async ()=>{
+        const id=div.dataset.id,target=deckParams[focus];
+        const r=await fetch(BASE+'/api/tracks/stream/'+id);
+        const blob=await r.blob();
+        const deck=window[focus]; // a or b
+        deck.loadFile(new File([blob],div.dataset.name||'track'));
+      };
+    });
+  }catch(e){}
+}
+loadLib();
+document.getElementById('lib-upload').onclick=()=>document.getElementById('lib-file').click();
+document.getElementById('lib-file').onchange=async function(){
+  for(const f of this.files){
+    const fd=new FormData();fd.append('file',f);
+    await fetch(BASE+'/api/upload',{method:'POST',body:fd});
+  }
+  this.value='';loadLib();
+};
 </script>
 </body>
 </html>

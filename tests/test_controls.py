@@ -1,10 +1,10 @@
-import subprocess, time, sys, json
+import subprocess, time, sys, json, os
 from playwright.sync_api import sync_playwright
 
 def _serve():
-    srv = subprocess.Popen(['python3','-m','http.server','8765'],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    time.sleep(1)
+    srv = subprocess.Popen(['python3','backend.py'],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=os.path.dirname(__file__)+'/..')
+    time.sleep(1.5)
     return srv
 
 def test_controls_work():
