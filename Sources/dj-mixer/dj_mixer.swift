@@ -80,7 +80,6 @@ import AVFoundation
     }
     
     func updateMix() {
-        for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
         masterMixer.volume = masterVolume
         fx.on = fxOn
         // Effective BPM per channel: override or detected
@@ -96,13 +95,16 @@ import AVFoundation
         }
         masterBPM = effBPM
         fx.apply(type: fxType, param: fxParam, beat: fxBeat, bpm: effBPM)
-        // Sync playback speed per channel
+        // Sync playback speed per channel with gain compensation
         for ch in channels {
             let detected = ch.bpm
             if detected > 0 && ch.bpmOverride >= 0 {
                 ch.timePitch.rate = ch.bpmOverride / Float(detected)
+                let comp = 1.0 / sqrt(max(ch.timePitch.rate, 0.1))
+                ch.applyMix(crossfader: crossfader, curve: crossfaderCurve, rateComp: comp)
             } else {
                 ch.timePitch.rate = 1.0
+                ch.applyMix(crossfader: crossfader, curve: crossfaderCurve, rateComp: 1.0)
             }
         }
     }
@@ -244,13 +246,13 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     
     func meter() -> Float { meterVal }
     
-    func applyMix(crossfader: Float, curve _: Float) {
+    func applyMix(crossfader: Float, curve _: Float, rateComp: Float = 1.0) {
         let c = fader
         var xfGain: Float = 1
         if xfaderAssign == -1 { xfGain = 1 }
         else if xfaderAssign == 0 { xfGain = (1 - crossfader) * 2 }
         else { xfGain = crossfader * 2 }
-        channelMixer.volume = trim * c * xfGain
+        channelMixer.volume = trim * c * xfGain * rateComp
         cueMixer.volume = cueOn ? 0.8 : 0
     }
     func load(url: URL) {
