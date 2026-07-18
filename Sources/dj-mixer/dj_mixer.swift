@@ -81,7 +81,8 @@ import AVFoundation
     
     func updateMix() {
         for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
-        masterMixer.volume = masterVolume
+        masterMixer.volume = 0.85  // force fixed volume
+        masterVolume = 0.85
         fx.on = fxOn
         // Effective BPM per channel: override or detected
         let loaded = channels.filter { $0.currentFile != nil }
