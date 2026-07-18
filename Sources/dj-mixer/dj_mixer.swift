@@ -537,7 +537,7 @@ struct ChannelStripView: View {
                         .foregroundStyle(channel.bpmOverride >= 0 ? Color.orange : Color(white: 0.4))
                     TextField("", text: $bpmText)
                         .textFieldStyle(.roundedBorder).font(.system(size: 8)).multilineTextAlignment(.center)
-                        .frame(width: 36).focused($bpmFocused)
+                        .frame(width: 30).focused($bpmFocused)
                         .onSubmit {
                             let v = bpmText.trimmingCharacters(in: .whitespaces)
                             if v.isEmpty { channel.bpmOverride = -1 }
@@ -545,15 +545,10 @@ struct ChannelStripView: View {
                             bpmText = "\(Int(channel.bpmOverride >= 0 ? channel.bpmOverride : Float(channel.bpm)))"
                             bpmFocused = false
                         }
-                        .onChange(of: bpmFocused) { _, focused in
-                            if !focused {
-                                let v = bpmText.trimmingCharacters(in: .whitespaces)
-                                if v.isEmpty || Float(v) == nil {
-                                    channel.bpmOverride = -1
-                                    bpmText = "\(Int(channel.bpmOverride >= 0 ? channel.bpmOverride : Float(channel.bpm)))"
-                                }
-                            }
-                        }
+                    if channel.bpmOverride >= 0 {
+                        Button("A") { channel.bpmOverride = -1; bpmText = "\(Int(channel.bpm))" }
+                            .buttonStyle(.borderless).font(.system(size: 7)).foregroundStyle(.orange)
+                    }
                 }
             }
             .padding(.horizontal, 10)
