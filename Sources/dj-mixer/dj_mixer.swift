@@ -100,9 +100,9 @@ import AVFoundation
         for ch in channels {
             let detected = ch.bpm
             if detected > 0 && ch.bpmOverride >= 0 {
-                ch.varispeed.rate = ch.bpmOverride / Float(detected)
+                ch.timePitch.rate = ch.bpmOverride / Float(detected)
             } else {
-                ch.varispeed.rate = 1.0
+                ch.timePitch.rate = 1.0
             }
         }
     }
@@ -173,7 +173,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
 @Observable class Channel: Identifiable {
     let id: Int
     var player = AVAudioPlayerNode()
-    var varispeed = AVAudioUnitVarispeed()
+    var timePitch = AVAudioUnitTimePitch()
     var eq: AVAudioUnitEQ
     var trimMixer = AVAudioMixerNode()
     var channelMixer = AVAudioMixerNode()
@@ -224,9 +224,9 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     }
     
     func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
-        engine.attach(player); engine.attach(varispeed); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
-        engine.connect(player, to: varispeed, format: nil)
-        engine.connect(varispeed, to: eq, format: nil)
+        engine.attach(player); engine.attach(timePitch); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
+        engine.connect(player, to: timePitch, format: nil)
+        engine.connect(timePitch, to: eq, format: nil)
         engine.connect(eq, to: trimMixer, format: nil)
         engine.connect(trimMixer, to: channelMixer, format: nil)
         engine.connect(channelMixer, to: master, format: nil)
