@@ -1,0 +1,81 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "PackageStructure": ["<PackageStructure>"]
+  "dj-mixer-arm64-apple-macosx-debug.exe": ["<dj-mixer-arm64-apple-macosx-debug.exe>"]
+  "dj-mixer-arm64-apple-macosx-debug.module": ["<dj-mixer-arm64-apple-macosx-debug.module>"]
+  "main": ["<dj-mixer-arm64-apple-macosx-debug.exe>","<dj-mixer-arm64-apple-macosx-debug.module>"]
+  "test": ["<dj-mixer-arm64-apple-macosx-debug.exe>","<dj-mixer-arm64-apple-macosx-debug.module>"]
+default: "main"
+nodes:
+  "/Users/geodoo/Dev/dj-mixer/Sources/dj-mixer/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer":
+    is-mutated: true
+commands:
+  "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer-entitlement.plist":
+    tool: write-auxiliary-file
+    inputs: ["<entitlement-plist>","<com.apple.security.get-task-allow>"]
+    outputs: ["/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer-entitlement.plist"]
+    description: "Write auxiliary file /Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer-entitlement.plist"
+
+  "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/dj_mixer.swift.o"]
+    outputs: ["/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer.product/Objects.LinkFileList"
+
+  "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/geodoo/Dev/dj-mixer/Sources/dj-mixer/dj_mixer.swift"]
+    outputs: ["/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/sources"]
+    description: "Write auxiliary file /Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/sources"
+
+  "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"]
+    outputs: ["/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+
+  "<dj-mixer-arm64-apple-macosx-debug.exe>":
+    tool: phony
+    inputs: ["<dj-mixer-arm64-apple-macosx-debug.exe-CodeSigning>"]
+    outputs: ["<dj-mixer-arm64-apple-macosx-debug.exe>"]
+
+  "<dj-mixer-arm64-apple-macosx-debug.module>":
+    tool: phony
+    inputs: ["/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/dj_mixer.swift.o","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/Modules/dj_mixer.swiftmodule"]
+    outputs: ["<dj-mixer-arm64-apple-macosx-debug.module>"]
+
+  "C.dj-mixer-arm64-apple-macosx-debug.exe":
+    tool: shell
+    inputs: ["/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/dj_mixer.swift.o","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer.product/Objects.LinkFileList"]
+    outputs: ["/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer"]
+    description: "Linking ./.build/arm64-apple-macosx/debug/dj-mixer"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-L","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug","-o","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer","-module-name","dj_mixer","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-alias","-Xlinker","_dj_mixer_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer.product/Objects.LinkFileList","-Xlinker","-rpath","-Xlinker","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-6.2/macosx","-target","arm64-apple-macosx14.0","-Xlinker","-add_ast_path","-Xlinker","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/Modules/dj_mixer.swiftmodule","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g"]
+
+  "C.dj-mixer-arm64-apple-macosx-debug.exe-entitlements":
+    tool: shell
+    inputs: ["/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer-entitlement.plist"]
+    outputs: ["<dj-mixer-arm64-apple-macosx-debug.exe-CodeSigning>"]
+    description: "Applying debug entitlements to ./.build/arm64-apple-macosx/debug/dj-mixer"
+    args: ["codesign","--force","--sign","-","--entitlements","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer-entitlement.plist","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj-mixer"]
+
+  "C.dj-mixer-arm64-apple-macosx-debug.module":
+    tool: shell
+    inputs: ["/Users/geodoo/Dev/dj-mixer/Sources/dj-mixer/dj_mixer.swift","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/sources"]
+    outputs: ["/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/dj_mixer.swift.o","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/Modules/dj_mixer.swiftmodule"]
+    description: "Compiling Swift Module 'dj_mixer' (1 sources)"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","dj_mixer","-emit-dependencies","-emit-module","-emit-module-path","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/Modules/dj_mixer.swiftmodule","-output-file-map","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/output-file-map.json","-incremental","-c","@/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/sources","-I","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx14.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j10","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","dj_mixer_main","-parse-as-library","-swift-version","5","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","dj_mixer"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/geodoo/Dev/dj-mixer/Sources/dj-mixer/","/Users/geodoo/Dev/dj-mixer/Package.swift","/Users/geodoo/Dev/dj-mixer/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

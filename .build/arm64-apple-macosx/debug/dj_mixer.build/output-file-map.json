@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/primary.swiftdeps"
+  },
+  "/Users/geodoo/Dev/dj-mixer/Sources/dj-mixer/dj_mixer.swift": {
+    "dependencies": "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/dj_mixer.d",
+    "object": "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/dj_mixer.swift.o",
+    "swiftmodule": "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/dj_mixer~partial.swiftmodule",
+    "swift-dependencies": "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/dj_mixer.swiftdeps",
+    "diagnostics": "/Users/geodoo/Dev/dj-mixer/.build/arm64-apple-macosx/debug/dj_mixer.build/dj_mixer.dia"
+  }
+}
