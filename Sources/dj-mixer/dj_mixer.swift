@@ -60,6 +60,9 @@ import AVFoundation
     var currentFile: AVAudioFile? { didSet { player.stop(); isPlaying = false; pausedAt = 0 } }
     var pausedAt: TimeInterval = 0
     var duration: TimeInterval = 0
+    var currentTime: TimeInterval = 0
+    var cuePoint: TimeInterval = 0
+    var cueSet = false
     var waveform: [Float] = []
     var fileName: String = ""
     var onUpdate: (() -> Void)?
@@ -160,6 +163,37 @@ import AVFoundation
         eq.bands[2].gain = (hiBand - 0.5) * 12
     }
     
+    func seek(to time: TimeInterval) {
+        guard currentFile != nil else { return }
+        pausedAt = max(0, min(time, duration))
+        if isPlaying {
+            player.stop()
+            let file = currentFile!
+            let startFrame = AVAudioFramePosition(pausedAt * file.fileFormat.sampleRate)
+            let framesToPlay = AVAudioFrameCount(file.length - startFrame)
+            if startFrame > 0 {
+                player.scheduleSegment(file, startingFrame: startFrame, frameCount: framesToPlay, at: nil)
+            } else {
+                player.scheduleFile(file, at: nil, completionHandler: nil)
+            }
+            player.play()
+        }
+    }
+    
+    func toggleCue() {
+        guard currentFile != nil else { return }
+        if !isPlaying && cueSet {
+            // jump to cue and play
+            seek(to: cuePoint)
+            isPlaying = true
+            cueSet = false
+        } else {
+            // mark current position as cue
+            cuePoint = isPlaying ? currentTime : pausedAt
+            cueSet = true
+        }
+    }
+    
     func updateEngine() {
         // called via engine.updateMix
     }
@@ -186,6 +220,7 @@ struct DeckView: View {
     @Bindable var deck: Deck
     let color: Color
     @State private var showFilePicker = false
+    @State private var timer: Timer?
     
     var body: some View {
         VStack(spacing: 8) {
@@ -195,7 +230,12 @@ struct DeckView: View {
                 Text(deck.fileName).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
             }
             
-            WaveformView(waveform: deck.waveform, progress: deck.isPlaying ? 0.3 : 0)
+            WaveformView(
+                waveform: deck.waveform,
+                progress: deck.duration > 0 ? deck.currentTime / deck.duration : 0,
+                cueSet: deck.cueSet, cueProgress: deck.duration > 0 ? deck.cuePoint / deck.duration : 0,
+                onTap: { p in deck.seek(to: p * deck.duration) }
+            )
                 .frame(height: 72)
                 .cornerRadius(6)
             
@@ -203,7 +243,7 @@ struct DeckView: View {
                 Button(deck.isPlaying ? "❚❚" : "▶") { deck.isPlaying.toggle() }
                     .buttonStyle(.borderedProminent)
                     .tint(deck.isPlaying ? color : .gray)
-                Button("Cue") {}
+                Button("Cue") { deck.toggleCue() }
                     .buttonStyle(.borderless)
                     .font(.caption)
                 Button("⟳") {}
@@ -228,12 +268,24 @@ struct DeckView: View {
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.audio]) { result in
             if case .success(let url) = result { deck.load(url: url) }
         }
+        .onAppear {
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                if deck.isPlaying, let nodeTime = deck.player.lastRenderTime,
+                   let playerTime = deck.player.playerTime(forNodeTime: nodeTime) {
+                    deck.currentTime = Double(playerTime.sampleTime) / playerTime.sampleRate
+                }
+            }
+        }
+        .onDisappear { timer?.invalidate() }
     }
 }
 
 struct WaveformView: View {
     let waveform: [Float]
     let progress: Double
+    let cueSet: Bool
+    let cueProgress: Double
+    let onTap: (Double) -> Void
     
     var body: some View {
         GeometryReader { geo in
@@ -248,9 +300,18 @@ struct WaveformView: View {
                         let rect = CGRect(x: CGFloat(i) * barW, y: (size.height - barH) / 2, width: max(barW - 0.5, 1), height: max(barH, 1))
                         ctx.fill(Path(roundedRect: rect, cornerSize: CGSize(width: 0.5, height: 0.5)), with: .color(peak > 0.3 ? .orange : .purple))
                     }
+                    // cue line
+                    if cueSet {
+                        let cx = size.width * cueProgress
+                        ctx.stroke(Path(CGPath(rect: CGRect(x: cx, y: 0, width: 2, height: size.height), transform: nil)), with: .color(.green))
+                    }
                     // progress line
                     let px = size.width * progress
                     ctx.stroke(Path(CGPath(rect: CGRect(x: px, y: 0, width: 1, height: size.height), transform: nil)), with: .color(.white))
+                }
+                .onTapGesture { loc in
+                    let w = geo.size.width
+                    if w > 0 { onTap(loc.x / w) }
                 }
             }
         }
