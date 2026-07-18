@@ -7,13 +7,14 @@ import AVFoundation
     var body: some Scene {
         WindowGroup {
             ContentView(engine: $engine)
-                .frame(minWidth: 800, minHeight: 500)
+                .frame(minWidth: 400, minHeight: 300)
                 .onAppear {
                     engine.start()
                     NSApplication.shared.setActivationPolicy(.regular)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         if let w = NSApplication.shared.windows.first {
                             w.makeKeyAndOrderFront(nil)
+                            w.level = .floating
                         }
                         NSApplication.shared.activate(ignoringOtherApps: true)
                     }
