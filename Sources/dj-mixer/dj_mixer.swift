@@ -8,7 +8,7 @@ import AVFoundation
     var body: some Scene {
         WindowGroup {
             ContentView(engine: engine)
-                .frame(minWidth: 900, minHeight: 600)
+                .frame(minWidth: 1200, minHeight: 700)
                 .onAppear {
                     engine.start()
                     NSApplication.shared.setActivationPolicy(.regular)
@@ -347,14 +347,13 @@ struct ChannelStripView: View {
     @State private var timer: Timer?
     
     var body: some View {
-        VStack(spacing: 5) {
-            // Label + Load
+        VStack(spacing: 8) {
             HStack {
-                Text("CH \(index+1)").font(.system(size: 10, weight: .bold)).foregroundStyle(Color(white: 0.65))
+                Text("CH \(index+1)").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.65))
                 Spacer()
                 Button("📁") { showFile = true }
-                    .buttonStyle(.borderless).font(.system(size: 11)).foregroundStyle(Color(white: 0.5))
-            }.padding(.horizontal, 6).padding(.top, 6)
+                    .buttonStyle(.borderless).font(.system(size: 13)).foregroundStyle(Color(white: 0.5))
+            }.padding(.horizontal, 10).padding(.top, 8)
             
             // Waveform
             WaveformMini(waveform: channel.waveform,
@@ -362,57 +361,57 @@ struct ChannelStripView: View {
                 cueSet: channel.cueSet,
                 cueProgress: channel.duration > 0 ? channel.cuePoint / channel.duration : 0,
                 onTap: { p in channel.seek(to: p * channel.duration) })
-                .frame(height: 36).cornerRadius(4).padding(.horizontal, 6)
+                .frame(height: 48).cornerRadius(6).padding(.horizontal, 10)
             
             // Transport
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Button(channel.isPlaying ? "⏹" : "▶") { channel.isPlaying.toggle() }
-                    .buttonStyle(.borderedProminent).tint(channel.isPlaying ? .green : .gray).font(.system(size: 11))
+                    .buttonStyle(.borderedProminent).tint(channel.isPlaying ? .green : .gray).font(.system(size: 13))
                 Button("CUE") { channel.toggleCue() }
-                    .buttonStyle(.bordered).tint(channel.cueSet ? .green : .gray).font(.system(size: 9))
+                    .buttonStyle(.bordered).tint(channel.cueSet ? .green : .gray).font(.system(size: 11))
                 Spacer()
-                Text(channel.fileName).font(.system(size: 8)).foregroundStyle(Color(white: 0.4)).lineLimit(1)
-            }.padding(.horizontal, 6)
+                Text(channel.fileName).font(.system(size: 9)).foregroundStyle(Color(white: 0.4)).lineLimit(1)
+            }.padding(.horizontal, 10)
             
             // TRIM + EQ
-            HStack(spacing: 8) {
-                VStack(spacing: 2) {
-                    Text("TRIM").font(.system(size: 7)).foregroundStyle(Color(white: 0.5))
-                    DialKnob(value: $channel.trim, range: 0...1.5).frame(width: 32, height: 32)
+            HStack(spacing: 12) {
+                VStack(spacing: 3) {
+                    Text("TRIM").font(.system(size: 8)).foregroundStyle(Color(white: 0.5))
+                    DialKnob(value: $channel.trim, range: 0...1.5).frame(width: 38, height: 38)
                 }
                 Spacer()
                 EQKnob(label: "HI", value: $channel.hiKnob)
                 EQKnob(label: "MID", value: $channel.midKnob)
                 EQKnob(label: "LOW", value: $channel.lowKnob)
                 Spacer()
-                VStack(spacing: 2) {
-                    Text("CFX").font(.system(size: 7)).foregroundStyle(Color(white: 0.5))
-                    DialKnob(value: $channel.fxSend, range: 0...1).frame(width: 24, height: 24)
+                VStack(spacing: 3) {
+                    Text("CFX").font(.system(size: 8)).foregroundStyle(Color(white: 0.5))
+                    DialKnob(value: $channel.fxSend, range: 0...1).frame(width: 28, height: 28)
                 }
-            }.padding(.horizontal, 6)
+            }.padding(.horizontal, 10)
             
             // Level meter + Master fader
-            HStack(spacing: 6) {
-                LevelMeter(level: engine.channelPeaks[index]).frame(width: 6, height: 50)
-                VStack(spacing: 2) {
-                    Text("\(Int(channel.fader * 100))").font(.system(size: 8, weight: .medium))
+            HStack(spacing: 10) {
+                LevelMeter(level: engine.channelPeaks[index]).frame(width: 8, height: 70)
+                VStack(spacing: 3) {
+                    Text("\(Int(channel.fader * 100))").font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color(white: 0.6))
                     Slider(value: $channel.fader, in: 0...1)
                         .tint(.blue)
                 }
-                VStack(spacing: 4) {
+                VStack(spacing: 6) {
                     Button("C") { channel.cueOn.toggle() }
-                        .buttonStyle(.bordered).tint(channel.cueOn ? .blue : .gray).font(.system(size: 8))
+                        .buttonStyle(.bordered).tint(channel.cueOn ? .blue : .gray).font(.system(size: 9))
                     Picker("", selection: $channel.xfaderAssign) {
                         Text("THRU").tag(-1)
                         Text("A").tag(0)
                         Text("B").tag(1)
-                    }.pickerStyle(.segmented).scaleEffect(0.85).frame(width: 70)
-                }.frame(width: 40)
-            }.padding(.horizontal, 6)
+                    }.pickerStyle(.segmented).frame(width: 80)
+                }.frame(width: 50)
+            }.padding(.horizontal, 10)
         }
-        .frame(minWidth: 220, maxWidth: 260)
-        .padding(.vertical, 6)
+        .frame(minWidth: 240)
+        .padding(.vertical, 8)
         .background(Color(white: index % 2 == 0 ? 0.12 : 0.1))
         .cornerRadius(6)
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(white: 0.18), lineWidth: 1))
@@ -438,13 +437,13 @@ struct DialKnob: View {
     
     var body: some View {
         ZStack {
-            Circle().stroke(Color(white: 0.25), lineWidth: 3)
+            Circle().stroke(Color(white: 0.25), lineWidth: 4)
             Circle().trim(from: 0, to: CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound)))
-                .stroke(Color.blue, lineWidth: 3).rotationEffect(.degrees(-90))
-            Circle().fill(Color(white: 0.18)).frame(width: 16, height: 16)
+                .stroke(Color.blue, lineWidth: 4).rotationEffect(.degrees(-90))
+            Circle().fill(Color(white: 0.18)).frame(width: 20, height: 20)
         }
         .gesture(DragGesture().onChanged { g in
-            let delta = Float(g.translation.height) * -0.006
+            let delta = Float(g.translation.height) * -0.005
             value = max(range.lowerBound, min(range.upperBound, value + delta))
         })
     }
@@ -455,17 +454,17 @@ struct EQKnob: View {
     @Binding var value: Float
     
     var body: some View {
-        VStack(spacing: 2) {
-            Text(label).font(.system(size: 7, weight: .medium)).foregroundStyle(Color(white: 0.5))
+        VStack(spacing: 3) {
+            Text(label).font(.system(size: 8, weight: .medium)).foregroundStyle(Color(white: 0.5))
             ZStack {
-                Circle().stroke(value > 0.48 && value < 0.52 ? Color(white: 0.3) : Color.blue, lineWidth: 2.5)
+                Circle().stroke(value > 0.48 && value < 0.52 ? Color(white: 0.3) : Color.blue, lineWidth: 3)
                 Circle().trim(from: 0, to: CGFloat(abs(value - 0.5) * 2))
-                    .stroke(value > 0.5 ? Color.orange : Color.red, lineWidth: 2.5)
+                    .stroke(value > 0.5 ? Color.orange : Color.red, lineWidth: 3)
                     .rotationEffect(.degrees(value > 0.5 ? -90 : 90))
-                Circle().fill(Color(white: 0.14)).frame(width: 14, height: 14)
-            }.frame(width: 28, height: 28)
+                Circle().fill(Color(white: 0.14)).frame(width: 18, height: 18)
+            }.frame(width: 34, height: 34)
             .gesture(DragGesture().onChanged { g in
-                let delta = Float(g.translation.height) * -0.005
+                let delta = Float(g.translation.height) * -0.004
                 value = max(0, min(1, value + delta))
             })
         }
@@ -478,11 +477,11 @@ struct LevelMeter: View {
     var body: some View {
         GeometryReader { geo in
             let h = geo.size.height
-            VStack(spacing: 1) {
-                Rectangle().fill(level > 0.85 ? Color.red : Color(white: 0.2)).frame(height: h * 0.2)
-                Rectangle().fill(level > 0.7 ? Color.orange : Color(white: 0.2)).frame(height: h * 0.3)
-                Rectangle().fill(level > 0.4 ? Color.yellow : Color(white: 0.2)).frame(height: h * 0.2)
-                Rectangle().fill(level > 0.1 ? Color.green : Color(white: 0.2)).frame(height: h * 0.3)
+            VStack(spacing: 2) {
+                Rectangle().fill(level > 0.85 ? Color.red : Color(white: 0.2)).frame(height: h * 0.25)
+                Rectangle().fill(level > 0.7 ? Color.orange : Color(white: 0.2)).frame(height: h * 0.25)
+                Rectangle().fill(level > 0.4 ? Color.yellow : Color(white: 0.2)).frame(height: h * 0.25)
+                Rectangle().fill(level > 0.1 ? Color.green : Color(white: 0.2)).frame(height: h * 0.25)
             }
         }
     }
@@ -577,15 +576,15 @@ struct CrossfaderView: View {
     @Bindable var engine: AudioEngine
     
     var body: some View {
-        HStack(spacing: 12) {
-            Text("A").font(.system(size: 10, weight: .bold)).foregroundStyle(engine.crossfader < 0.3 ? .orange : .secondary)
+        HStack(spacing: 16) {
+            Text("A").font(.system(size: 13, weight: .bold)).foregroundStyle(engine.crossfader < 0.3 ? .orange : .secondary)
             Slider(value: $engine.crossfader, in: 0...1)
                 .onChange(of: engine.crossfader) { _, _ in engine.updateMix() }
-            Text("B").font(.system(size: 10, weight: .bold)).foregroundStyle(engine.crossfader > 0.7 ? .orange : .secondary)
-            Text("CURVE").font(.system(size: 8)).foregroundStyle(.secondary)
-            Slider(value: $engine.crossfaderCurve, in: 0...1).frame(width: 60)
+            Text("B").font(.system(size: 13, weight: .bold)).foregroundStyle(engine.crossfader > 0.7 ? .orange : .secondary)
+            Text("CURVE").font(.system(size: 10)).foregroundStyle(.secondary)
+            Slider(value: $engine.crossfaderCurve, in: 0...1).frame(width: 80)
                 .onChange(of: engine.crossfaderCurve) { _, _ in engine.updateMix() }
-        }.padding(.horizontal, 12)
+        }.padding(.horizontal, 16)
     }
 }
 
