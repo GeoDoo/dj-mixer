@@ -161,14 +161,8 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
         engine.connect(trimMixer, to: channelMixer, format: nil)
         engine.connect(channelMixer, to: master, format: nil)
         engine.connect(cueMixer, to: master, format: nil)
-        // Level metering: tap a parallel mixer to get real audio peaks
-        let meterMixer = AVAudioMixerNode()
-        engine.attach(meterMixer)
-        engine.connect(channelMixer, to: meterMixer, format: nil)
-        engine.connect(meterMixer, to: master, format: nil)
-        meterMixer.volume = 0  // silent — only used for metering
-        let fmt = meterMixer.outputFormat(forBus: 0)
-        meterMixer.installTap(onBus: 0, bufferSize: 256, format: fmt) { [weak self] buf, _ in
+        // Level metering via tap on the channel mixer
+        channelMixer.installTap(onBus: 0, bufferSize: 256, format: nil) { [weak self] buf, _ in
             guard let s = self, let d = buf.floatChannelData?[0] else { return }
             var pk: Float = 0
             for i in 0..<Int(buf.frameLength) { pk = max(pk, abs(d[i])) }
