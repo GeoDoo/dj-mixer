@@ -46,7 +46,6 @@ import AVFoundation
     var channelPeaks: [Float] = [0, 0, 0, 0]
     var masterPeak: Float = 0
     var masterBPM: Double = 120
-    var bpmOverride: Float = 0  // 0 = use detected BPM
     
     // Library
     var library = LibraryManager.default.load()
@@ -83,17 +82,25 @@ import AVFoundation
     func updateMix() {
         for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
         masterMixer.volume = masterVolume
-        // Average BPM from loaded channels
-        let loaded = channels.filter { $0.currentFile != nil }
-        masterBPM = loaded.isEmpty ? 120 : Double(loaded.reduce(0) { $0 + $1.bpm }) / Double(loaded.count)
         fx.on = fxOn
-        let activeBPM = bpmOverride > 0 ? Double(bpmOverride) : masterBPM
-        fx.apply(type: fxType, param: fxParam, beat: fxBeat, bpm: activeBPM)
-        // Sync all channels' playback speed to BPM ratio
+        // Effective BPM per channel: override or detected
+        let loaded = channels.filter { $0.currentFile != nil }
+        let effBPM: Double
+        if loaded.isEmpty {
+            effBPM = 120
+        } else {
+            effBPM = loaded.reduce(0.0) { sum, ch in
+                let detected = ch.bpm
+                return sum + (ch.bpmOverride > 0 ? Double(ch.bpmOverride) : detected)
+            } / Double(loaded.count)
+        }
+        masterBPM = effBPM
+        fx.apply(type: fxType, param: fxParam, beat: fxBeat, bpm: effBPM)
+        // Sync playback speed per channel
         for ch in channels {
             let detected = ch.bpm
-            if detected > 0 && bpmOverride > 0 {
-                ch.varispeed.rate = Float(bpmOverride) / Float(detected)
+            if detected > 0 && ch.bpmOverride > 0 {
+                ch.varispeed.rate = ch.bpmOverride / Float(detected)
             } else {
                 ch.varispeed.rate = 1.0
             }
@@ -197,6 +204,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var cueSet = false
     var waveform: [Float] = []
     var fileName: String = ""
+    var bpmOverride: Float = 0  // 0 = use detected BPM
     var onUpdate: (() -> Void)?
     var onLoad: ((TrackRecord) -> Void)?
     
@@ -502,10 +510,18 @@ struct ChannelStripView: View {
             }
             .padding(.horizontal, 12)
             
-            // Track info
-            Text(channel.fileName.isEmpty ? " " : channel.fileName)
-                .font(.system(size: 8)).foregroundStyle(Color(white: 0.35))
-                .lineLimit(1).padding(.horizontal, 10)
+            // Track info + BPM
+            HStack(spacing: 4) {
+                Text(channel.fileName.isEmpty ? " " : channel.fileName)
+                    .font(.system(size: 8)).foregroundStyle(Color(white: 0.35)).lineLimit(1)
+                Spacer()
+                if !channel.fileName.isEmpty {
+                    TextField("\(Int(channel.bpm))", value: $channel.bpmOverride, format: .number)
+                        .textFieldStyle(.roundedBorder).font(.system(size: 9)).multilineTextAlignment(.center)
+                        .frame(width: 40)
+                }
+            }
+            .padding(.horizontal, 10)
         }
         .frame(minWidth: 260)
         .padding(.vertical, 6)
@@ -792,15 +808,6 @@ struct BeatFXView: View {
                     Picker("", selection: $engine.fxBeat) {
                         ForEach(FXBeat.allCases, id: \.self) { b in Text(b.rawValue).font(.system(size: 8)).tag(b) }
                     }.pickerStyle(.menu).frame(width: 55)
-                    Text("BPM").font(.system(size: 7)).foregroundStyle(.secondary)
-                    TextField("BPM", value: $engine.bpmOverride, format: .number)
-                        .textFieldStyle(.plain).font(.system(size: 9)).multilineTextAlignment(.center)
-                        .frame(width: 40).padding(2).background(Color(white: 0.15)).cornerRadius(3)
-                        .onChange(of: engine.bpmOverride) { _, _ in engine.updateMix() }
-                    if engine.bpmOverride > 0 {
-                        Button("✕") { engine.bpmOverride = 0 }
-                            .buttonStyle(.borderless).font(.system(size: 7)).foregroundStyle(.red)
-                    }
                 }
             }
         }.padding(4)
