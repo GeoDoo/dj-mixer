@@ -317,31 +317,31 @@ struct ContentView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Top label bar
             HStack {
-                Text("DJM-TOUR1").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
+                Text("DJM-TOUR1").font(.system(size: 11, weight: .bold)).foregroundStyle(Color(white: 0.7))
                 Spacer()
-                Text("ALPHATHETA").font(.system(size: 9)).foregroundStyle(.tertiary)
+                Text("ALPHATHETA").font(.system(size: 10)).foregroundStyle(Color(white: 0.4))
             }
-            .padding(.horizontal, 12).padding(.top, 6)
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 4)
             
-            HStack(spacing: 0) {
-                // 4 channel strips
-                ForEach(Array(engine.channels.enumerated()), id: \.element.id) { i, ch in
-                    ChannelStripView(channel: ch, index: i, engine: engine)
-                    if i < 3 { Divider().frame(width: 1) }
+            ScrollView([.horizontal, .vertical]) {
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        ForEach(Array(engine.channels.enumerated()), id: \.element.id) { i, ch in
+                            ChannelStripView(channel: ch, index: i, engine: engine)
+                            if i < 3 { Divider().frame(width: 2).background(Color(white: 0.15)) }
+                        }
+                    }
+                    Divider().background(Color(white: 0.15))
+                    BottomSection(engine: engine)
                 }
             }
-            
-            // Bottom section: Beat FX + Crossfader + Master/Booth
-            BottomSection(engine: engine)
         }
-        .background(Color(white: 0.08))
+        .background(Color(white: 0.1))
         .preferredColorScheme(.dark)
     }
 }
 
-// MARK: - Channel Strip
 struct ChannelStripView: View {
     @Bindable var channel: Channel
     let index: Int
@@ -350,81 +350,75 @@ struct ChannelStripView: View {
     @State private var timer: Timer?
     
     var body: some View {
-        VStack(spacing: 4) {
-            // Channel label + load
+        VStack(spacing: 5) {
+            // Label + Load
             HStack {
-                Text("CH\(index+1)").font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(Color(white: 0.6))
+                Text("CH \(index+1)").font(.system(size: 10, weight: .bold)).foregroundStyle(Color(white: 0.65))
                 Spacer()
-                Button("○") { showFile = true }
-                    .buttonStyle(.borderless).font(.system(size: 7)).foregroundStyle(.secondary)
-            }.padding(.horizontal, 4).padding(.top, 4)
+                Button("📁") { showFile = true }
+                    .buttonStyle(.borderless).font(.system(size: 11)).foregroundStyle(Color(white: 0.5))
+            }.padding(.horizontal, 6).padding(.top, 6)
             
             // Waveform
-            WaveformMini(waveform: channel.waveform, progress: channel.duration > 0 ? channel.currentTime / channel.duration : 0,
-                         cueSet: channel.cueSet, cueProgress: channel.duration > 0 ? channel.cuePoint / channel.duration : 0,
-                         onTap: { p in channel.seek(to: p * channel.duration) })
-                .frame(height: 32).cornerRadius(3).padding(.horizontal, 4)
+            WaveformMini(waveform: channel.waveform,
+                progress: channel.duration > 0 ? channel.currentTime / channel.duration : 0,
+                cueSet: channel.cueSet,
+                cueProgress: channel.duration > 0 ? channel.cuePoint / channel.duration : 0,
+                onTap: { p in channel.seek(to: p * channel.duration) })
+                .frame(height: 36).cornerRadius(4).padding(.horizontal, 6)
             
             // Transport
-            HStack(spacing: 2) {
-                Button(channel.isPlaying ? "■" : "▶") { channel.isPlaying.toggle() }
-                    .buttonStyle(.borderless).font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(channel.isPlaying ? .green : .white)
+            HStack(spacing: 6) {
+                Button(channel.isPlaying ? "⏹" : "▶") { channel.isPlaying.toggle() }
+                    .buttonStyle(.borderedProminent).tint(channel.isPlaying ? .green : .gray).font(.system(size: 11))
                 Button("CUE") { channel.toggleCue() }
-                    .buttonStyle(.borderless).font(.system(size: 7))
-                    .foregroundStyle(channel.cueSet ? .green : .secondary)
-            }
+                    .buttonStyle(.bordered).tint(channel.cueSet ? .green : .gray).font(.system(size: 9))
+                Spacer()
+                Text(channel.fileName).font(.system(size: 8)).foregroundStyle(Color(white: 0.4)).lineLimit(1)
+            }.padding(.horizontal, 6)
             
-            // TRIM knob
-            VStack(spacing: 1) {
-                Text("TRIM").font(.system(size: 6)).foregroundStyle(Color(white: 0.5))
-                DialKnob(value: $channel.trim, range: 0...1.5, label: "")
-                    .frame(width: 28, height: 28)
-            }
-            
-            // EQ knobs
-            HStack(spacing: 1) {
+            // TRIM + EQ
+            HStack(spacing: 8) {
+                VStack(spacing: 2) {
+                    Text("TRIM").font(.system(size: 7)).foregroundStyle(Color(white: 0.5))
+                    DialKnob(value: $channel.trim, range: 0...1.5).frame(width: 32, height: 32)
+                }
+                Spacer()
                 EQKnob(label: "HI", value: $channel.hiKnob)
                 EQKnob(label: "MID", value: $channel.midKnob)
                 EQKnob(label: "LOW", value: $channel.lowKnob)
-            }
+                Spacer()
+                VStack(spacing: 2) {
+                    Text("CFX").font(.system(size: 7)).foregroundStyle(Color(white: 0.5))
+                    DialKnob(value: $channel.fxSend, range: 0...1).frame(width: 24, height: 24)
+                }
+            }.padding(.horizontal, 6)
             
-            // Color FX
-            HStack(spacing: 2) {
-                Button("CFX") { channel.colorFXOn.toggle() }
-                    .buttonStyle(.borderless).font(.system(size: 6))
-                    .foregroundStyle(channel.colorFXOn ? .cyan : .secondary)
-                DialKnob(value: $channel.fxSend, range: 0...1, label: "")
-                    .frame(width: 20, height: 20)
-            }
-            
-            // Channel fader (vertical)
-            VStack(spacing: 2) {
-                LevelMeter(level: engine.channelPeaks[index])
-                    .frame(width: 4, height: 40)
-                Text(String(format: "%.0f", channel.fader * 100))
-                    .font(.system(size: 6)).foregroundStyle(Color(white: 0.4))
-                Slider(value: $channel.fader, in: 0...1)
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 60, height: 12)
-            }
-            
-            // Cue + XFader assign
-            HStack(spacing: 2) {
-                Button("C") { channel.cueOn.toggle() }
-                    .buttonStyle(.borderless).font(.system(size: 7))
-                    .foregroundStyle(channel.cueOn ? .blue : .secondary)
-                Picker("", selection: $channel.xfaderAssign) {
-                    Text("THRU").tag(-1)
-                    Text("A").tag(0)
-                    Text("B").tag(1)
-                }.pickerStyle(.segmented).scaleEffect(0.7).frame(width: 60)
-            }
+            // Level meter + Master fader
+            HStack(spacing: 6) {
+                LevelMeter(level: engine.channelPeaks[index]).frame(width: 6, height: 50)
+                VStack(spacing: 2) {
+                    Text("\(Int(channel.fader * 100))").font(.system(size: 8, weight: .medium))
+                        .foregroundStyle(Color(white: 0.6))
+                    Slider(value: $channel.fader, in: 0...1)
+                        .tint(.blue)
+                }
+                VStack(spacing: 4) {
+                    Button("C") { channel.cueOn.toggle() }
+                        .buttonStyle(.bordered).tint(channel.cueOn ? .blue : .gray).font(.system(size: 8))
+                    Picker("", selection: $channel.xfaderAssign) {
+                        Text("THRU").tag(-1)
+                        Text("A").tag(0)
+                        Text("B").tag(1)
+                    }.pickerStyle(.segmented).scaleEffect(0.85).frame(width: 70)
+                }.frame(width: 40)
+            }.padding(.horizontal, 6)
         }
-        .frame(minWidth: 0, maxWidth: .infinity)
-        .padding(.vertical, 4)
-        .background(index % 2 == 0 ? Color(white: 0.1) : Color(white: 0.09))
+        .frame(minWidth: 220, maxWidth: 260)
+        .padding(.vertical, 6)
+        .background(Color(white: index % 2 == 0 ? 0.12 : 0.1))
+        .cornerRadius(6)
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(white: 0.18), lineWidth: 1))
         .fileImporter(isPresented: $showFile, allowedContentTypes: [.audio]) { r in
             if case .success(let u) = r { channel.load(url: u) }
         }
@@ -444,22 +438,18 @@ struct ChannelStripView: View {
 struct DialKnob: View {
     @Binding var value: Float
     let range: ClosedRange<Float>
-    let label: String
     
     var body: some View {
-        VStack(spacing: 1) {
-            if !label.isEmpty { Text(label).font(.system(size: 6)).foregroundStyle(Color(white: 0.5)) }
-            ZStack {
-                Circle().stroke(Color(white: 0.2), lineWidth: 2)
-                Circle().trim(from: 0, to: CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound)))
-                    .stroke(Color.blue, lineWidth: 2).rotationEffect(.degrees(-90))
-                Circle().fill(Color(white: 0.15)).frame(width: 14, height: 14)
-            }
-            .gesture(DragGesture().onChanged { g in
-                let delta = Float(g.translation.height) * -0.008
-                value = max(range.lowerBound, min(range.upperBound, value + delta))
-            })
+        ZStack {
+            Circle().stroke(Color(white: 0.25), lineWidth: 3)
+            Circle().trim(from: 0, to: CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound)))
+                .stroke(Color.blue, lineWidth: 3).rotationEffect(.degrees(-90))
+            Circle().fill(Color(white: 0.18)).frame(width: 16, height: 16)
         }
+        .gesture(DragGesture().onChanged { g in
+            let delta = Float(g.translation.height) * -0.006
+            value = max(range.lowerBound, min(range.upperBound, value + delta))
+        })
     }
 }
 
@@ -468,20 +458,17 @@ struct EQKnob: View {
     @Binding var value: Float
     
     var body: some View {
-        VStack(spacing: 1) {
-            Text(label).font(.system(size: 6)).foregroundStyle(Color(white: 0.5))
+        VStack(spacing: 2) {
+            Text(label).font(.system(size: 7, weight: .medium)).foregroundStyle(Color(white: 0.5))
             ZStack {
-                Circle().stroke(value > 0.48 && value < 0.52 ? Color(white: 0.25) : Color.blue, lineWidth: 2)
+                Circle().stroke(value > 0.48 && value < 0.52 ? Color(white: 0.3) : Color.blue, lineWidth: 2.5)
                 Circle().trim(from: 0, to: CGFloat(abs(value - 0.5) * 2))
-                    .stroke(value > 0.5 ? Color.orange : Color.red, lineWidth: 2)
+                    .stroke(value > 0.5 ? Color.orange : Color.red, lineWidth: 2.5)
                     .rotationEffect(.degrees(value > 0.5 ? -90 : 90))
-                Circle().fill(Color(white: 0.12)).frame(width: 12, height: 12)
-                if value > 0.48 && value < 0.52 {
-                    Circle().fill(Color(white: 0.3)).frame(width: 2, height: 2)
-                }
-            }.frame(width: 24, height: 24)
+                Circle().fill(Color(white: 0.14)).frame(width: 14, height: 14)
+            }.frame(width: 28, height: 28)
             .gesture(DragGesture().onChanged { g in
-                let delta = Float(g.translation.height) * -0.006
+                let delta = Float(g.translation.height) * -0.005
                 value = max(0, min(1, value + delta))
             })
         }
@@ -495,10 +482,10 @@ struct LevelMeter: View {
         GeometryReader { geo in
             let h = geo.size.height
             VStack(spacing: 1) {
-                Rectangle().fill(level > 0.85 ? Color.red : Color(white: 0.15)).frame(height: h * 0.2)
-                Rectangle().fill(level > 0.7 ? Color.orange : Color(white: 0.15)).frame(height: h * 0.2)
-                Rectangle().fill(level > 0.5 ? Color.yellow : Color(white: 0.15)).frame(height: h * 0.2)
-                Rectangle().fill(level > 0.2 ? Color.green : Color(white: 0.15)).frame(height: h * 0.4)
+                Rectangle().fill(level > 0.85 ? Color.red : Color(white: 0.2)).frame(height: h * 0.2)
+                Rectangle().fill(level > 0.7 ? Color.orange : Color(white: 0.2)).frame(height: h * 0.3)
+                Rectangle().fill(level > 0.4 ? Color.yellow : Color(white: 0.2)).frame(height: h * 0.2)
+                Rectangle().fill(level > 0.1 ? Color.green : Color(white: 0.2)).frame(height: h * 0.3)
             }
         }
     }
@@ -511,68 +498,42 @@ struct WaveformMini: View {
     var body: some View {
         GeometryReader { geo in
             if waveform.isEmpty {
-                Text("---").font(.system(size: 7)).foregroundStyle(Color(white: 0.3))
+                Text("Load a track").font(.system(size: 8)).foregroundStyle(Color(white: 0.35))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ZStack(alignment: .topLeading) {
+                    Color(white: 0.08)
                     Canvas { ctx, size in
                         let bw = size.width / CGFloat(waveform.count)
                         for (i, p) in waveform.enumerated() {
                             let bh = CGFloat(p) * size.height * 0.8
-                            let r = CGRect(x: CGFloat(i) * bw, y: (size.height - bh) / 2, width: max(bw - 0.3, 0.5), height: max(bh, 0.5))
-                            ctx.fill(Path(roundedRect: r, cornerSize: CGSize(width: 0.3, height: 0.3)), with: .color(Color.orange.opacity(0.7)))
+                            let r = CGRect(x: CGFloat(i) * bw, y: (size.height - bh) / 2, width: max(bw - 0.5, 1), height: max(bh, 1))
+                            ctx.fill(Path(roundedRect: r, cornerSize: CGSize(width: 0.5, height: 0.5)), with: .color(Color.orange.opacity(0.7)))
                         }
                     }
-                    // cue line
-                    if cueSet {
-                        Rectangle().fill(.green).frame(width: 1.5)
-                            .offset(x: geo.size.width * cueProgress)
-                    }
-                    // progress line
-                    Rectangle().fill(.white).frame(width: 1)
-                        .offset(x: geo.size.width * progress)
+                    if cueSet { Rectangle().fill(.green).frame(width: 2).offset(x: geo.size.width * cueProgress) }
+                    Rectangle().fill(.white).frame(width: 1.5).offset(x: geo.size.width * progress)
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { loc in
-                    let w = geo.size.width
-                    if w > 0 { onTap(loc.x / w) }
-                }
+                .onTapGesture { loc in let w = geo.size.width; if w > 0 { onTap(loc.x / w) } }
             }
         }
     }
 }
 
-// MARK: - Bottom Section
 struct BottomSection: View {
     @Bindable var engine: AudioEngine
     
     var body: some View {
         HStack(spacing: 0) {
-            // Beat FX
-            BeatFXView(engine: engine)
-                .frame(width: 300)
-            Divider()
-            // Crossfader
-            VStack(spacing: 4) {
-                HStack(spacing: 20) {
-                    HStack { Text("A").font(.system(size: 8)).foregroundStyle(.secondary)
-                        Slider(value: $engine.crossfader, in: 0...1).frame(width: 100)
-                        Text("B").font(.system(size: 8)).foregroundStyle(.secondary)
-                    }
-                    Text("CURVE").font(.system(size: 7)).foregroundStyle(.secondary)
-                    Slider(value: $engine.crossfaderCurve, in: 0...1).frame(width: 60)
-                }
-                .onChange(of: engine.crossfader) { _, _ in engine.updateMix() }
-                .onChange(of: engine.crossfaderCurve) { _, _ in engine.updateMix() }
-            }
-            .frame(maxWidth: .infinity).padding(.horizontal, 12)
-            Divider()
-            // Master + Booth
-            MasterSection(engine: engine)
-                .frame(width: 160)
+            BeatFXView(engine: engine).frame(width: 280)
+            Divider().background(Color(white: 0.15))
+            CrossfaderView(engine: engine).frame(maxWidth: .infinity)
+            Divider().background(Color(white: 0.15))
+            MasterSection(engine: engine).frame(width: 180)
         }
-        .frame(height: 100).padding(.horizontal, 4)
-        .background(Color(white: 0.07))
+        .frame(height: 90).padding(4)
+        .background(Color(white: 0.08))
     }
 }
 
@@ -580,41 +541,56 @@ struct BeatFXView: View {
     @Bindable var engine: AudioEngine
     
     var body: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Text("BEAT FX").font(.system(size: 8, weight: .bold)).foregroundStyle(.blue)
-                Spacer()
-                Button(engine.fxOn ? "ON" : "OFF") { engine.fxOn.toggle(); engine.updateMix() }
-                    .buttonStyle(.borderless).font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(engine.fxOn ? .green : .secondary)
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("BEAT FX").font(.system(size: 9, weight: .bold)).foregroundStyle(.blue)
+                    Button(engine.fxOn ? "ON" : "OFF") { engine.fxOn.toggle(); engine.updateMix() }
+                        .buttonStyle(.bordered).tint(engine.fxOn ? .green : .gray).font(.system(size: 8))
+                }
+                HStack(spacing: 6) {
+                    VStack(spacing: 1) {
+                        Text("TYPE").font(.system(size: 7)).foregroundStyle(.secondary)
+                        Picker("", selection: $engine.fxType) {
+                            ForEach(FXType.allCases, id: \.self) { t in Text(t.rawValue.uppercased()).font(.system(size: 9)).tag(t) }
+                        }.pickerStyle(.menu).frame(width: 70)
+                    }
+                    VStack(spacing: 1) {
+                        Text("PARAM").font(.system(size: 7)).foregroundStyle(.secondary)
+                        DialKnob(value: $engine.fxParam, range: 0...1).frame(width: 26, height: 26)
+                            .onChange(of: engine.fxParam) { _, _ in engine.updateMix() }
+                    }
+                    VStack(spacing: 1) {
+                        Text("BEAT").font(.system(size: 7)).foregroundStyle(.secondary)
+                        Picker("", selection: $engine.fxBeat) {
+                            ForEach(FXBeat.allCases, id: \.self) { b in Text(b.rawValue).font(.system(size: 9)).tag(b) }
+                        }.pickerStyle(.menu).frame(width: 60)
+                    }
+                }
             }
-            HStack(spacing: 4) {
-                VStack(spacing: 2) {
-                    Text("TYPE").font(.system(size: 6)).foregroundStyle(.secondary)
-                    Picker("", selection: $engine.fxType) {
-                        ForEach(FXType.allCases, id: \.self) { t in Text(t.rawValue.uppercased()).font(.system(size: 8)).tag(t) }
-                    }.pickerStyle(.menu).scaleEffect(0.7)
-                }
-                VStack(spacing: 2) {
-                    Text("PARAM").font(.system(size: 6)).foregroundStyle(.secondary)
-                    DialKnob(value: $engine.fxParam, range: 0...1, label: "").frame(width: 24, height: 24)
-                        .onChange(of: engine.fxParam) { _, _ in engine.updateMix() }
-                }
-                VStack(spacing: 2) {
-                    Text("BEAT").font(.system(size: 6)).foregroundStyle(.secondary)
-                    Picker("", selection: $engine.fxBeat) {
-                        ForEach(FXBeat.allCases, id: \.self) { b in Text(b.rawValue).font(.system(size: 7)).tag(b) }
-                    }.pickerStyle(.menu).scaleEffect(0.7)
-                }
-            }
-            HStack(spacing: 4) {
+            VStack(spacing: 4) {
                 ForEach(0..<4) { i in
                     Button("CH\(i+1)") { engine.fxChannels[i].toggle() }
-                        .buttonStyle(.borderless).font(.system(size: 7))
-                        .foregroundStyle(engine.fxChannels[i] ? .blue : .secondary)
+                        .buttonStyle(.bordered).tint(engine.fxChannels[i] ? .blue : .gray).font(.system(size: 8))
                 }
             }
         }.padding(6)
+    }
+}
+
+struct CrossfaderView: View {
+    @Bindable var engine: AudioEngine
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("A").font(.system(size: 10, weight: .bold)).foregroundStyle(engine.crossfader < 0.3 ? .orange : .secondary)
+            Slider(value: $engine.crossfader, in: 0...1)
+                .onChange(of: engine.crossfader) { _, _ in engine.updateMix() }
+            Text("B").font(.system(size: 10, weight: .bold)).foregroundStyle(engine.crossfader > 0.7 ? .orange : .secondary)
+            Text("CURVE").font(.system(size: 8)).foregroundStyle(.secondary)
+            Slider(value: $engine.crossfaderCurve, in: 0...1).frame(width: 60)
+                .onChange(of: engine.crossfaderCurve) { _, _ in engine.updateMix() }
+        }.padding(.horizontal, 12)
     }
 }
 
@@ -622,20 +598,22 @@ struct MasterSection: View {
     @Bindable var engine: AudioEngine
     
     var body: some View {
-        VStack(spacing: 3) {
-            HStack {
-                Text("MASTER").font(.system(size: 8, weight: .bold)).foregroundStyle(Color(white: 0.7))
-                LevelMeter(level: engine.masterPeak).frame(width: 4, height: 24)
-                DialKnob(value: $engine.masterVolume, range: 0...1, label: "").frame(width: 20, height: 20)
+        HStack(spacing: 8) {
+            VStack(spacing: 4) {
+                Text("MASTER").font(.system(size: 8, weight: .bold)).foregroundStyle(Color(white: 0.6))
+                LevelMeter(level: engine.masterPeak).frame(width: 6, height: 30)
+            }
+            VStack(spacing: 4) {
+                DialKnob(value: $engine.masterVolume, range: 0...1).frame(width: 24, height: 24)
                     .onChange(of: engine.masterVolume) { _, _ in engine.updateMix() }
+                Text("VOL").font(.system(size: 7)).foregroundStyle(.secondary)
             }
-            HStack {
-                Text("BOOTH").font(.system(size: 8)).foregroundStyle(.secondary)
-                DialKnob(value: $engine.boothVolume, range: 0...1, label: "").frame(width: 20, height: 20)
+            VStack(spacing: 4) {
+                DialKnob(value: $engine.boothVolume, range: 0...1).frame(width: 24, height: 24)
                     .onChange(of: engine.boothVolume) { _, _ in engine.updateMix() }
-                Text("REC").font(.system(size: 8)).foregroundStyle(.secondary)
-                Button("●") {}.buttonStyle(.borderless).font(.system(size: 8)).foregroundStyle(.red)
+                Text("BOOTH").font(.system(size: 7)).foregroundStyle(.secondary)
             }
+            Button("●") {}.buttonStyle(.borderless).font(.system(size: 10)).foregroundStyle(.red)
         }.padding(6)
     }
 }
