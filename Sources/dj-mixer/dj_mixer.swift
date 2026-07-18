@@ -204,7 +204,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var cueSet = false
     var waveform: [Float] = []
     var fileName: String = ""
-    var bpmOverride: Float = -1  // -1 = use detected BPM
+    var bpmOverride: Float = -1 { didSet { onUpdate?() } }  // -1 = use detected BPM
     var onUpdate: (() -> Void)?
     var onLoad: ((TrackRecord) -> Void)?
     
@@ -444,6 +444,7 @@ struct ChannelStripView: View {
     @State private var showFile = false
     @State private var timer: Timer?
     @State private var bpmText = ""
+    @FocusState private var bpmFocused: Bool
     
     var body: some View {
         VStack(spacing: 6) {
@@ -523,12 +524,13 @@ struct ChannelStripView: View {
                         .foregroundStyle(channel.bpmOverride >= 0 ? Color.orange : Color(white: 0.4))
                     TextField("", text: $bpmText)
                         .textFieldStyle(.roundedBorder).font(.system(size: 8)).multilineTextAlignment(.center)
-                        .frame(width: 36)
+                        .frame(width: 36).focused($bpmFocused)
                         .onSubmit {
                             let v = bpmText.trimmingCharacters(in: .whitespaces)
                             if v.isEmpty { channel.bpmOverride = -1 }
                             else if let n = Float(v) { channel.bpmOverride = n }
                             bpmText = "\(Int(channel.bpmOverride >= 0 ? channel.bpmOverride : Float(channel.bpm)))"
+                            bpmFocused = false
                         }
                 }
             }
