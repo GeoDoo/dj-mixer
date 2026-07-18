@@ -80,14 +80,12 @@ import AVFoundation
     
     func reconnectChannel(_ id: Int) {
         let ch = channels[id]
-        let fmt = avEngine.outputNode.outputFormat(forBus: 0)
+        guard ch.currentFile != nil else { return }
         avEngine.disconnectNodeInput(ch.eq)
-        avEngine.connect(ch.player, to: ch.timePitch, format: fmt)
-        avEngine.connect(ch.timePitch, to: ch.eq, format: fmt)
-        ch.timePitch.bypass = false
-        ch.timePitch.pitch = 0
-        ch.timePitch.rate = ch.bpmOverride > 0 ? ch.bpmOverride / Float(ch.bpm) : 1.0
-        timePitchConnected = true
+        avEngine.connect(ch.player, to: ch.timePitch, format: nil)
+        avEngine.connect(ch.timePitch, to: ch.eq, format: nil)
+        ch.timePitch.bypass = false; ch.timePitch.pitch = 0
+        ch.timePitch.rate = ch.bpmOverride >= 0 && ch.bpm > 0 ? ch.bpmOverride / Float(ch.bpm) : 1.0
         updateMix()
     }
     
