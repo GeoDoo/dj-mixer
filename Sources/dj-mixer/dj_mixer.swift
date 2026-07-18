@@ -46,6 +46,7 @@ import AVFoundation
     var channelPeaks: [Float] = [0, 0, 0, 0]
     var masterPeak: Float = 0
     var masterBPM: Double = 120
+    var bpmOverride: Float = 0  // 0 = use detected BPM
     
     // Library
     var library = LibraryManager.default.load()
@@ -86,7 +87,8 @@ import AVFoundation
         let loaded = channels.filter { $0.currentFile != nil }
         masterBPM = loaded.isEmpty ? 120 : Double(loaded.reduce(0) { $0 + $1.bpm }) / Double(loaded.count)
         fx.on = fxOn
-        fx.apply(type: fxType, param: fxParam, beat: fxBeat, bpm: masterBPM)
+        let activeBPM = bpmOverride > 0 ? Double(bpmOverride) : masterBPM
+        fx.apply(type: fxType, param: fxParam, beat: fxBeat, bpm: activeBPM)
     }
     
     func startMeterTimer() {
@@ -235,7 +237,6 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     func load(url: URL) {
         let startScoped = url.startAccessingSecurityScopedResource()
         defer { if startScoped { url.stopAccessingSecurityScopedResource() } }
-        // ingest into local samples dir
         var loadURL = url
         if let rec = LibraryManager.default.ingest(url: url) {
             loadURL = URL(fileURLWithPath: rec.localPath)
@@ -245,7 +246,9 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             let file = try AVAudioFile(forReading: loadURL)
             currentFile = file; fileName = loadURL.lastPathComponent
             duration = TimeInterval(file.length) / file.fileFormat.sampleRate
-            computeWaveform(file: file); computeBPM(file: file); pausedAt = 0
+            pausedAt = 0
+            // Compute waveform + BPM in a single file pass
+            computeAll(file: file, loadURL: loadURL)
         } catch { print("CH\(id) load: \(error)") }
     }
     
@@ -254,72 +257,65 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
         do {
             let file = try AVAudioFile(forReading: url)
             currentFile = file; fileName = track.name
-            duration = track.duration
-            computeWaveform(file: file); computeBPM(file: file); pausedAt = 0
+            duration = track.duration; pausedAt = 0
+            computeAll(file: file, loadURL: url)
         } catch { print("CH\(id) lib: \(error)") }
     }
     
-    func computeWaveform(file: AVAudioFile) {
-        let total = file.length; let target = 400
+    func computeAll(file: AVAudioFile, loadURL: URL) {
+        let sr = file.fileFormat.sampleRate
+        let total = file.length
+        let targetWF = 400
+        let hop = Int64(sr / 100)  // 100 Hz for BPM envelope
         let chunk = min(Int64(65536), total)
         guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(chunk)) else { return }
-        waveform = []; var pos: Int64 = 0
+        
+        waveform = []
+        bpm = 120
+        var envelope = [Float]()
+        var pos: Int64 = 0
+        
         while pos < total {
             buf.frameLength = 0; file.framePosition = pos
             do { try file.read(into: buf) } catch { break }
             guard buf.frameLength > 0, let d = buf.floatChannelData?[0] else { break }
             let frames = Int(buf.frameLength)
-            let here = max(1, target * frames / Int(total))
+            
+            // Waveform peaks
+            let here = max(1, targetWF * frames / Int(total))
             for i in 0..<here {
                 let s = i * frames / here; let e = (i + 1) * frames / here
                 var peak: Float = 0
                 for j in s..<min(e, frames) { peak = max(peak, abs(d[j])) }
                 waveform.append(peak)
             }
+            
+            // BPM envelope (every 10ms = 100Hz)
+            if total > hop * 200 {  // need at least 2s of audio
+                let subChunks = frames / Int(hop)
+                for i in 0..<subChunks {
+                    let s = i * Int(hop); let e = min(s + Int(hop), frames)
+                    var eSum: Float = 0
+                    for j in s..<e { eSum += abs(d[j]) }
+                    envelope.append(eSum / Float(e - s))
+                }
+            }
+            
             pos += Int64(buf.frameLength)
         }
         file.framePosition = 0
-    }
-    
-    func computeBPM(file: AVAudioFile) {
-        let sr = file.fileFormat.sampleRate
-        let total = Int64(file.length)
-        let hop = Int64(sr / 100)  // 100 Hz envelope
-        let numFrames = Int(total / hop)
-        guard numFrames > 200 else { bpm = 120; return }  // need at least 2s
         
-        // Compute energy envelope
-        let chunk = min(hop, total)
-        guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(chunk)) else { return }
-        var envelope = [Float](repeating: 0, count: numFrames)
-        for i in 0..<numFrames {
-            file.framePosition = Int64(i) * hop
-            buf.frameLength = 0
-            try? file.read(into: buf)
-            guard buf.frameLength > 0, let d = buf.floatChannelData?[0] else { break }
-            var e: Float = 0
-            for j in 0..<Int(buf.frameLength) { e += abs(d[j]) }
-            envelope[i] = e / Float(buf.frameLength)
-        }
-        
-        // Autocorrelation on envelope to find beat period
-        let minLag = Int(Double(sr) / 180.0 / Double(hop))  // 180 BPM max
-        let maxLag = Int(Double(sr) / 60.0 / Double(hop))   // 60 BPM min
-        guard maxLag > minLag && maxLag < numFrames / 2 else { bpm = 120; return }
-        
-        var bestLag = minLag
-        var bestCorr: Float = 0
+        // Autocorrelation for BPM
+        guard envelope.count > 200 else { return }
+        let minLag = 10  // 100Hz / 180BPM = ~33 samples → safe lower bound
+        let maxLag = min(envelope.count / 2, 100)  // 100Hz / 60BPM = 100 samples
+        var bestLag = minLag; var bestCorr: Float = 0
         for lag in minLag...maxLag {
             var corr: Float = 0
-            for i in 0..<(numFrames - lag) { corr += envelope[i] * envelope[i + lag] }
+            for i in 0..<(envelope.count - lag) { corr += envelope[i] * envelope[i + lag] }
             if corr > bestCorr { bestCorr = corr; bestLag = lag }
         }
-        
-        if bestCorr > 0 {
-            let periodSec = Double(bestLag) / 100.0
-            bpm = periodSec > 0 ? 60.0 / periodSec : 120
-        }
-        file.framePosition = 0
+        if bestCorr > 0 { bpm = 60.0 / (Double(bestLag) / 100.0) }
     }
     
     func startPlay() {
@@ -775,6 +771,13 @@ struct BeatFXView: View {
                     Picker("", selection: $engine.fxBeat) {
                         ForEach(FXBeat.allCases, id: \.self) { b in Text(b.rawValue).font(.system(size: 8)).tag(b) }
                     }.pickerStyle(.menu).frame(width: 55)
+                    Text("BPM").font(.system(size: 7)).foregroundStyle(.secondary)
+                    Slider(value: $engine.bpmOverride, in: 0...200)
+                        .frame(width: 50)
+                        .onChange(of: engine.bpmOverride) { _, _ in engine.updateMix() }
+                    if engine.bpmOverride > 0 {
+                        Text("\(Int(engine.bpmOverride))").font(.system(size: 8)).foregroundStyle(.orange)
+                    }
                 }
             }
         }.padding(4)
