@@ -545,6 +545,15 @@ struct ChannelStripView: View {
                             bpmText = "\(Int(channel.bpmOverride >= 0 ? channel.bpmOverride : Float(channel.bpm)))"
                             bpmFocused = false
                         }
+                        .onChange(of: bpmFocused) { _, focused in
+                            if !focused {
+                                let v = bpmText.trimmingCharacters(in: .whitespaces)
+                                if v.isEmpty || Float(v) == nil {
+                                    channel.bpmOverride = -1
+                                    bpmText = "\(Int(channel.bpmOverride >= 0 ? channel.bpmOverride : Float(channel.bpm)))"
+                                }
+                            }
+                        }
                 }
             }
             .padding(.horizontal, 10)
