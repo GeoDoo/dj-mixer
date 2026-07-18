@@ -442,6 +442,7 @@ struct ChannelStripView: View {
     @Bindable var engine: AudioEngine
     @State private var showFile = false
     @State private var timer: Timer?
+    @State private var bpmText = ""
     
     var body: some View {
         VStack(spacing: 6) {
@@ -516,9 +517,18 @@ struct ChannelStripView: View {
                     .font(.system(size: 8)).foregroundStyle(Color(white: 0.35)).lineLimit(1)
                 Spacer()
                 if !channel.fileName.isEmpty {
-                    TextField("\(Int(channel.bpm))", value: $channel.bpmOverride, format: .number)
-                        .textFieldStyle(.roundedBorder).font(.system(size: 9)).multilineTextAlignment(.center)
-                        .frame(width: 40)
+                    let eff = Int(channel.bpmOverride >= 0 ? channel.bpmOverride : channel.bpm)
+                    Text("\(eff) BPM").font(.system(size: 8, weight: .medium))
+                        .foregroundStyle(channel.bpmOverride >= 0 ? Color.orange : Color(white: 0.4))
+                    TextField("", text: $bpmText)
+                        .textFieldStyle(.roundedBorder).font(.system(size: 8)).multilineTextAlignment(.center)
+                        .frame(width: 36)
+                        .onSubmit {
+                            let v = bpmText.trimmingCharacters(in: .whitespaces)
+                            if v.isEmpty { channel.bpmOverride = -1 }
+                            else if let n = Float(v) { channel.bpmOverride = n }
+                            bpmText = "\(Int(channel.bpmOverride >= 0 ? channel.bpmOverride : channel.bpm))"
+                        }
                 }
             }
             .padding(.horizontal, 10)
@@ -532,6 +542,7 @@ struct ChannelStripView: View {
             if case .success(let u) = r { channel.load(url: u) }
         }
         .onAppear {
+            bpmText = "\(Int(channel.bpm))"
             timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
                 if channel.isPlaying, let nt = channel.player.lastRenderTime,
                    let pt = channel.player.playerTime(forNodeTime: nt) {
