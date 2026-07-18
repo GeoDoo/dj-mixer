@@ -164,7 +164,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var hiKnob: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
     var midKnob: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
     var lowKnob: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
-    var fader: Float = 0.0 { didSet { onUpdate?() } }
+    var fader: Float = 1.0 { didSet { onUpdate?() } }
     var cueOn = false
     var fxSend: Float = 0
     var colorFXType: Int = 0
@@ -197,7 +197,6 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             eq.bands[i].filterType = t; eq.bands[i].frequency = f
             eq.bands[i].bandwidth = b; eq.bands[i].gain = 0; eq.bands[i].bypass = false
         }
-        fader = 0.0
     }
     
     func attach(to engine: AVAudioEngine, master: AVAudioMixerNode, fx: BeatFXProcessor) {
