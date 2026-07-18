@@ -192,6 +192,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             eq.bands[i].filterType = t; eq.bands[i].frequency = f
             eq.bands[i].bandwidth = b; eq.bands[i].gain = 0; eq.bands[i].bypass = false
         }
+        xfaderAssign = id < 2 ? 0 : 1  // CH 1-2 on A side, 3-4 on B side
     }
     
     func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
