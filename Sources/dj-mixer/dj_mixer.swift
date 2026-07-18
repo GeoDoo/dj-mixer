@@ -91,6 +91,8 @@ import AVFoundation
     }
     
     func load(url: URL) {
+        _ = url.startAccessingSecurityScopedResource()
+        defer { url.stopAccessingSecurityScopedResource() }
         do {
             let file = try AVAudioFile(forReading: url)
             currentFile = file
@@ -102,21 +104,30 @@ import AVFoundation
     }
     
     func computeWaveform(file: AVAudioFile) {
-        guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)) else { return }
-        do {
-            try file.read(into: buf)
-        } catch { return }
-        guard let data = buf.floatChannelData?[0] else { return }
-        let totalFrames = Int(buf.frameLength)
+        let totalFrames = file.length
         let targetSamples = 500
-        waveform = (0..<targetSamples).map { i -> Float in
-            let start = i * totalFrames / targetSamples
-            let end = (i + 1) * totalFrames / targetSamples
-            var peak: Float = 0
-            for j in start..<min(end, totalFrames) {
-                peak = max(peak, abs(data[j]))
+        let chunkSize = min(Int64(65536), totalFrames)
+        guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(chunkSize)) else {
+            print("waveform: failed to alloc buffer")
+            return
+        }
+        waveform = []
+        var position: Int64 = 0
+        while position < totalFrames {
+            buf.frameLength = 0
+            file.framePosition = position
+            do { try file.read(into: buf) } catch { break }
+            guard buf.frameLength > 0, let data = buf.floatChannelData?[0] else { break }
+            let frames = Int(buf.frameLength)
+            let samplesHere = max(1, targetSamples * frames / Int(totalFrames))
+            for i in 0..<samplesHere {
+                let start = i * frames / samplesHere
+                let end = (i + 1) * frames / samplesHere
+                var peak: Float = 0
+                for j in start..<min(end, frames) { peak = max(peak, abs(data[j])) }
+                waveform.append(peak)
             }
-            return peak
+            position += Int64(buf.frameLength)
         }
         file.framePosition = 0
     }
@@ -124,10 +135,12 @@ import AVFoundation
     func startPlay() {
         guard let file = currentFile else { isPlaying = false; return }
         player.stop()
-        player.scheduleFile(file, at: nil, completionHandler: nil)
         let startFrame = AVAudioFramePosition(pausedAt * file.fileFormat.sampleRate)
+        let framesToPlay = AVAudioFrameCount(file.length - startFrame)
         if startFrame > 0 {
-            player.scheduleSegment(file, startingFrame: startFrame, frameCount: AVAudioFrameCount(file.length - startFrame), at: nil)
+            player.scheduleSegment(file, startingFrame: startFrame, frameCount: framesToPlay, at: nil)
+        } else {
+            player.scheduleFile(file, at: nil, completionHandler: nil)
         }
         player.play()
     }
