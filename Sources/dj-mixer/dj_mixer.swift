@@ -8,7 +8,12 @@ import AVFoundation
         WindowGroup {
             ContentView(engine: $engine)
                 .frame(minWidth: 800, minHeight: 500)
-                .onAppear { engine.start() }
+                .onAppear {
+                    engine.start()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        NSApplication.shared.activate(ignoringOtherApps: true)
+                    }
+                }
         }
         .windowStyle(.hiddenTitleBar)
     }
@@ -27,6 +32,7 @@ import AVFoundation
         avEngine.attach(masterMixer)
         avEngine.connect(masterMixer, to: avEngine.outputNode, format: nil)
         for deck in decks { deck.attach(to: avEngine, master: masterMixer) }
+        for deck in decks { deck.onUpdate = { [weak self] in self?.updateMix() } }
     }
     
     func start() {
@@ -46,16 +52,17 @@ import AVFoundation
     var player = AVAudioPlayerNode()
     var eq: AVAudioUnitEQ
     var mixer = AVAudioMixerNode()
-    var volume: Float = 1.0 { didSet { updateEngine() } }
-    var hiBand: Float = 0.5 { didSet { updateEQ() } }
-    var midBand: Float = 0.5 { didSet { updateEQ() } }
-    var loBand: Float = 0.5 { didSet { updateEQ() } }
+    var volume: Float = 1.0 { didSet { onUpdate?() } }
+    var hiBand: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
+    var midBand: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
+    var loBand: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
     var isPlaying = false { didSet { isPlaying ? startPlay() : stopPlay() } }
     var currentFile: AVAudioFile? { didSet { player.stop(); isPlaying = false; pausedAt = 0 } }
     var pausedAt: TimeInterval = 0
     var duration: TimeInterval = 0
     var waveform: [Float] = []
     var fileName: String = ""
+    var onUpdate: (() -> Void)?
     
     init(id: String) {
         self.id = id
