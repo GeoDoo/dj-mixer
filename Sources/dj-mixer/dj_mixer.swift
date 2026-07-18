@@ -319,7 +319,18 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             for i in 0..<(envelope.count - lag) { corr += envelope[i] * envelope[i + lag] }
             if corr > bestCorr { bestCorr = corr; bestLag = lag }
         }
-        if bestCorr > 0 { bpm = 60.0 / (Double(bestLag) / 100.0) }
+        if bestCorr > 0 {
+            var detected = 60.0 / (Double(bestLag) / 100.0)
+            // Check if double tempo (sub-harmonic correction)
+            let halfLag = bestLag / 2
+            if halfLag >= minLag {
+                var halfCorr: Float = 0
+                for i in 0..<(envelope.count - halfLag) { halfCorr += envelope[i] * envelope[i + halfLag] }
+                if halfCorr > bestCorr * 0.8 { detected *= 2 }
+            }
+            // Clamp to reasonable range
+            bpm = max(60, min(200, detected))
+        }
     }
     
     func startPlay() {
@@ -781,11 +792,16 @@ struct BeatFXView: View {
                         ForEach(FXBeat.allCases, id: \.self) { b in Text(b.rawValue).font(.system(size: 8)).tag(b) }
                     }.pickerStyle(.menu).frame(width: 55)
                     Text("BPM").font(.system(size: 7)).foregroundStyle(.secondary)
-                    Slider(value: $engine.bpmOverride, in: 0...200)
-                        .frame(width: 50)
-                        .onChange(of: engine.bpmOverride) { _, _ in engine.updateMix() }
+                    let bpmBinding = Binding<Int>(
+                        get: { Int(engine.bpmOverride > 0 ? engine.bpmOverride : engine.masterBPM) },
+                        set: { engine.bpmOverride = Float($0) }
+                    )
+                    TextField("", value: bpmBinding, formatter: NumberFormatter())
+                        .textFieldStyle(.plain).font(.system(size: 9)).multilineTextAlignment(.center)
+                        .frame(width: 36).padding(2).background(Color(white: 0.15)).cornerRadius(3)
                     if engine.bpmOverride > 0 {
-                        Text("\(Int(engine.bpmOverride))").font(.system(size: 8)).foregroundStyle(.orange)
+                        Button("✕") { engine.bpmOverride = 0 }
+                            .buttonStyle(.borderless).font(.system(size: 7)).foregroundStyle(.red)
                     }
                 }
             }
