@@ -595,8 +595,10 @@ struct LibraryView: View {
                         HStack(spacing: 2) {
                             ForEach(0..<4) { i in
                                 Button("CH\(i+1)") {
-                                    engine.channels[i].loadFromLibrary(track: track)
-                                    dismiss()
+                                    if let url = track.resolveURL() {
+                                        engine.channels[i].load(url: url)
+                                        dismiss()
+                                    }
                                 }
                                 .buttonStyle(.bordered).tint(.gray).font(.system(size: 8)).controlSize(.mini)
                             }
