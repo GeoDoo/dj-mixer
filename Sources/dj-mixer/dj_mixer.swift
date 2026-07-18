@@ -52,7 +52,11 @@ import AVFoundation
     init() {
         fx = BeatFXProcessor(engine: avEngine)
         avEngine.attach(masterMixer)
+        // Direct path: master → output (dry signal, always active)
+        avEngine.connect(masterMixer, to: avEngine.outputNode, format: nil)
+        // FX path: master → FX input → delay → reverb → distortion → FX output → outputNode (wet only when on)
         avEngine.connect(masterMixer, to: fx.inputMixer, format: nil)
+        fx.outputMixer.volume = 0  // off by default
         avEngine.connect(fx.outputMixer, to: avEngine.outputNode, format: nil)
         for ch in channels { ch.attach(to: avEngine, master: masterMixer) }
         for ch in channels { ch.onUpdate = { [weak self] in self?.updateMix() } }
@@ -82,7 +86,12 @@ import AVFoundation
     func updateMix() {
         for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
         masterMixer.volume = masterVolume
-        fx.apply(type: fxType, param: fxParam, beat: fxBeat, on: fxOn)
+        if fxOn {
+            fx.outputMixer.volume = 1
+            fx.apply(type: fxType, param: fxParam, beat: fxBeat, on: true)
+        } else {
+            fx.outputMixer.volume = 0
+        }
     }
     
     func startMeterTimer() {
