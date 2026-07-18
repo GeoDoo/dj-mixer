@@ -117,6 +117,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
         engine.attach(reverb)
         engine.attach(distortion)
         // Series: input → delay → reverb → distortion → output
+        engine.connect(inputMixer, to: delay, format: nil)
         engine.connect(delay, to: reverb, format: nil)
         engine.connect(reverb, to: distortion, format: nil)
         engine.connect(distortion, to: outputMixer, format: nil)
