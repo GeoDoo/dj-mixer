@@ -15,8 +15,8 @@
     <canvas id="wave-a" height="72"></canvas>
     <div class="controls">
       <button class="ctrl-btn" id="play-a" title="Play/Pause [Space]">▶</button>
-      <button class="ctrl-btn-sm" id="cue-a" title="Set Cue Point">Cue</button>
-      <button class="ctrl-btn-sm" id="loop-a" title="Loop">⟳</button>
+      <button class="ctrl-btn-sm" id="cue-a" title="Set cue marker (green line on waveform) — click to mark position">Cue</button>
+      <button class="ctrl-btn-sm" id="loop-a" title="Loop on/off — track repeats when playing">⟳</button>
     </div>
     <div class="eq-row">
       <div class="eq-group"><label>Vol</label><input type="range" class="eq-fader" id="eq-a-vol" min="0" max="1" step="0.01" value="1"></div>
@@ -41,8 +41,8 @@
     <canvas id="wave-b" height="72"></canvas>
     <div class="controls">
       <button class="ctrl-btn" id="play-b" title="Play/Pause [Space]">▶</button>
-      <button class="ctrl-btn-sm" id="cue-b" title="Set Cue Point">Cue</button>
-      <button class="ctrl-btn-sm" id="loop-b" title="Loop">⟳</button>
+      <button class="ctrl-btn-sm" id="cue-b" title="Set cue marker (green line on waveform) — click to mark position">Cue</button>
+      <button class="ctrl-btn-sm" id="loop-b" title="Loop on/off — track repeats when playing">⟳</button>
     </div>
     <div class="eq-row">
       <div class="eq-group"><label>Vol</label><input type="range" class="eq-fader" id="eq-b-vol" min="0" max="1" step="0.01" value="1"></div>
@@ -104,7 +104,8 @@ function makeDeck(id,canvasId){
     }
     if(cueSet){
       const cx=cuePoint/buf.duration*w;
-      cctx.fillStyle='oklch(0.65 0.15 70)';cctx.fillRect(cx-1*dpr,h-12*dpr,2*dpr,12*dpr);
+      cctx.strokeStyle='oklch(0.65 0.20 150)';cctx.lineWidth=2*dpr;
+      cctx.beginPath();cctx.moveTo(cx,0);cctx.lineTo(cx,h);cctx.stroke();
     }
   }
 
@@ -158,7 +159,7 @@ function makeDeck(id,canvasId){
     if(!buf)return;
     if(playing)cuePoint=pausePos+ctx.currentTime-startTime;
     else cuePoint=pausePos;
-    cueSet=true;cueBtn.classList.toggle('active');drawWave();
+    cueSet=true;cueBtn.classList.add('active');drawWave();
   };
   loopBtn.onclick=()=>{loop=!loop;loopBtn.classList.toggle('active');if(src)src.loop=loop;};
 
