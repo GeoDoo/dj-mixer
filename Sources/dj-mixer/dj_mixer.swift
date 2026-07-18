@@ -416,6 +416,17 @@ struct ChannelStripView: View {
                 Button("CUE") { channel.toggleCue() }
                     .buttonStyle(.bordered).tint(channel.cueSet ? .green : .gray).font(.system(size: 10)).controlSize(.small)
                 Spacer()
+                if !channel.fileName.isEmpty {
+                    Button("✕") {
+                        channel.currentFile = nil
+                        channel.fileName = ""
+                        channel.waveform = []
+                        channel.duration = 0
+                        channel.currentTime = 0
+                        channel.cueSet = false
+                    }
+                    .buttonStyle(.borderless).font(.system(size: 10)).foregroundStyle(.red)
+                }
                 Text(channel.fileName).font(.system(size: 9)).foregroundStyle(Color(white: 0.4)).lineLimit(1)
             }.padding(.horizontal, 10)
             
