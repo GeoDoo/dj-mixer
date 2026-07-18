@@ -1,13 +1,14 @@
 import SwiftUI
 import AVFoundation
 
+// MARK: - App Entry
 @main struct DJMixerApp: App {
     @State private var engine = AudioEngine()
     
     var body: some Scene {
         WindowGroup {
-            ContentView(engine: $engine)
-                .frame(minWidth: 400, minHeight: 300)
+            ContentView(engine: engine)
+                .frame(minWidth: 900, minHeight: 600)
                 .onAppear {
                     engine.start()
                     NSApplication.shared.setActivationPolicy(.regular)
@@ -20,47 +21,158 @@ import AVFoundation
                     }
                 }
         }
-        .windowStyle(.hiddenTitleBar)
     }
 }
 
-// MARK: - Audio Engine
-
+// MARK: - Audio Engine (4-channel)
 @Observable class AudioEngine {
     let avEngine = AVAudioEngine()
-    var decks: [Deck] = [Deck(id: "A"), Deck(id: "B")]
+    var channels: [Channel] = (0..<4).map { Channel(id: $0) }
     var crossfader: Float = 0.5
-    var masterMixer: AVAudioMixerNode
+    var crossfaderCurve: Float = 0.5
+    var masterVolume: Float = 0.85
+    var boothVolume: Float = 0.5
+    var masterMixer = AVAudioMixerNode()
+    var boothMixer = AVAudioMixerNode()
+    var fx: BeatFXProcessor
+    
+    // Beat FX state
+    var fxType: FXType = .delay
+    var fxParam: Float = 0.5
+    var fxBeat: FXBeat = .quarter
+    var fxOn = false
+    var fxChannels: [Bool] = [false, false, false, false]
+    
+    // Peak meters
+    var channelPeaks: [Float] = [0, 0, 0, 0]
+    var masterPeak: Float = 0
     
     init() {
-        masterMixer = AVAudioMixerNode()
+        fx = BeatFXProcessor(engine: avEngine)
         avEngine.attach(masterMixer)
+        avEngine.attach(boothMixer)
         avEngine.connect(masterMixer, to: avEngine.outputNode, format: nil)
-        for deck in decks { deck.attach(to: avEngine, master: masterMixer) }
-        for deck in decks { deck.onUpdate = { [weak self] in self?.updateMix() } }
+        avEngine.connect(boothMixer, to: avEngine.outputNode, format: nil)
+        boothMixer.volume = 0
+        for ch in channels { ch.attach(to: avEngine, master: masterMixer, fx: fx) }
+        for ch in channels { ch.onUpdate = { [weak self] in self?.updateMix() } }
+        fx.onUpdate = { [weak self] in self?.updateMix() }
     }
     
     func start() {
-        do { try avEngine.start() } catch { print("engine start fail: \(error)") }
+        do { try avEngine.start() } catch { print("engine fail: \(error)") }
+        startMeterTimer()
     }
     
     func updateMix() {
-        guard decks.count == 2 else { return }
-        let a = decks[0], b = decks[1]
-        a.mixer.volume = a.volume * (1 - crossfader) * 2
-        b.mixer.volume = b.volume * crossfader * 2
+        for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
+        masterMixer.volume = masterVolume
+        boothMixer.volume = boothVolume * 0.3
+        if fxOn { fx.apply(type: fxType, param: fxParam, beat: fxBeat) }
+        else { fx.bypassAll() }
+    }
+    
+    func startMeterTimer() {
+        Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
+            guard let s = self else { return }
+            for (i, ch) in s.channels.enumerated() {
+                s.channelPeaks[i] = ch.meter()
+            }
+            var avg: Float = 0
+            for p in s.channelPeaks { avg = max(avg, p) }
+            s.masterPeak = avg
+        }
     }
 }
 
-@Observable class Deck: Identifiable {
-    let id: String
+enum FXType: String, CaseIterable { case delay, echo, reverb, flanger, phaser, filter, crush, space }
+enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = "1/4", eighth = "1/8", sixteenth = "1/16" }
+
+@Observable class BeatFXProcessor {
+    let engine: AVAudioEngine
+    let reverb = AVAudioUnitReverb()
+    let delay = AVAudioUnitDelay()
+    let distortion = AVAudioUnitDistortion()
+    var currentType: FXType = .delay
+    
+    init(engine: AVAudioEngine) {
+        self.engine = engine
+        engine.attach(reverb)
+        engine.attach(delay)
+        engine.attach(distortion)
+        reverb.loadFactoryPreset(.cathedral)
+        delay.feedback = 30
+        delay.lowPassCutoff = 15000
+        delay.wetDryMix = 0
+        distortion.loadFactoryPreset(.drumsLoFi)
+        bypassAll()
+    }
+    
+    var onUpdate: (() -> Void)?
+    
+    func bypassAll() {
+        reverb.wetDryMix = 0
+        delay.wetDryMix = 0
+        distortion.wetDryMix = 0
+    }
+    
+    func apply(type: FXType, param: Float, beat: FXBeat) {
+        let beatMs: [FXBeat: Double] = [.whole: 2000, .half: 1000, .quarter: 500, .eighth: 250, .sixteenth: 125]
+        currentType = type
+        switch type {
+        case .delay, .echo:
+            delay.delayTime = beatMs[beat] ?? 500
+            delay.feedback = Float(param) * 80
+            delay.wetDryMix = Float(param) * 50
+            reverb.wetDryMix = 0
+            distortion.wetDryMix = 0
+        case .reverb:
+            reverb.wetDryMix = Float(param) * 60
+            delay.wetDryMix = 0; distortion.wetDryMix = 0
+        case .flanger:
+            distortion.wetDryMix = 0; reverb.wetDryMix = 0; delay.wetDryMix = 0
+            delay.delayTime = 3.0; delay.feedback = Float(param) * 40; delay.wetDryMix = Float(param) * 50
+        case .phaser:
+            distortion.wetDryMix = 0; reverb.wetDryMix = 0; delay.wetDryMix = 0
+            distortion.loadFactoryPreset(.drumsLoFi)
+            distortion.wetDryMix = Float(param) * 50
+        case .filter:
+            delay.lowPassCutoff = Float(param) * 20000 + 100
+            delay.wetDryMix = 100; reverb.wetDryMix = 0; distortion.wetDryMix = 0
+        case .crush:
+            distortion.loadFactoryPreset(.drumsLoFi)
+            distortion.wetDryMix = Float(param) * 60
+            reverb.wetDryMix = 0; delay.wetDryMix = 0
+        case .space:
+            reverb.loadFactoryPreset(.largeHall)
+            reverb.wetDryMix = Float(param) * 70
+            delay.wetDryMix = 0; distortion.wetDryMix = 0
+        }
+    }
+}
+
+// MARK: - Channel (deck)
+@Observable class Channel: Identifiable {
+    let id: Int
     var player = AVAudioPlayerNode()
     var eq: AVAudioUnitEQ
-    var mixer = AVAudioMixerNode()
-    var volume: Float = 1.0 { didSet { onUpdate?() } }
-    var hiBand: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
-    var midBand: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
-    var loBand: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
+    var trimMixer = AVAudioMixerNode()
+    var channelMixer = AVAudioMixerNode()
+    var cueMixer = AVAudioMixerNode()
+    
+    var trim: Float = 0.85 { didSet { onUpdate?() } }
+    var hiKnob: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
+    var midKnob: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
+    var lowKnob: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
+    var fader: Float = 0.0 { didSet { onUpdate?() } }
+    var cueOn = false
+    var fxSend: Float = 0
+    var colorFXType: Int = 0
+    var colorFXOn = false
+    
+    // crossfader assignment: -1 = off, 0 = A, 1 = B
+    var xfaderAssign: Int = 0
+    
     var isPlaying = false { didSet { isPlaying ? startPlay() : stopPlay() } }
     var currentFile: AVAudioFile? { didSet { player.stop(); isPlaying = false; pausedAt = 0 } }
     var pausedAt: TimeInterval = 0
@@ -71,31 +183,49 @@ import AVFoundation
     var waveform: [Float] = []
     var fileName: String = ""
     var onUpdate: (() -> Void)?
+    private var amp: Float = 0
     
-    init(id: String) {
-        self.id = id
-        eq = AVAudioUnitEQ(numberOfBands: 3)
-        let configs: [(type: AVAudioUnitEQFilterType, freq: Float, bw: Float)] = [
-            (.lowShelf, 200, 0.5),
-            (.parametric, 1200, 0.7),
-            (.highShelf, 7000, 0.5)
-        ]
-        for (i, c) in configs.enumerated() {
-            eq.bands[i].filterType = c.type
-            eq.bands[i].frequency = c.freq
-            eq.bands[i].bandwidth = c.bw
-            eq.bands[i].gain = 0
-            eq.bands[i].bypass = false
-        }
+    var displayName: String {
+        fileName.isEmpty ? "CH \(id + 1)" : fileName
     }
     
-    func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
-        engine.attach(player)
-        engine.attach(eq)
-        engine.attach(mixer)
+    init(id: Int) {
+        self.id = id
+        eq = AVAudioUnitEQ(numberOfBands: 3)
+        let cfgs: [(AVAudioUnitEQFilterType, Float, Float)] = [(.highShelf, 7000, 0.5), (.parametric, 1200, 0.7), (.lowShelf, 200, 0.5)]
+        for (i, (t, f, b)) in cfgs.enumerated() {
+            eq.bands[i].filterType = t; eq.bands[i].frequency = f
+            eq.bands[i].bandwidth = b; eq.bands[i].gain = 0; eq.bands[i].bypass = false
+        }
+        fader = 0.0
+    }
+    
+    func attach(to engine: AVAudioEngine, master: AVAudioMixerNode, fx: BeatFXProcessor) {
+        engine.attach(player); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
         engine.connect(player, to: eq, format: nil)
-        engine.connect(eq, to: mixer, format: nil)
-        engine.connect(mixer, to: master, format: nil)
+        engine.connect(eq, to: trimMixer, format: nil)
+        engine.connect(trimMixer, to: channelMixer, format: nil)
+        engine.connect(channelMixer, to: master, format: nil)
+        engine.connect(cueMixer, to: master, format: nil)
+    }
+    
+    func applyMix(crossfader: Float, curve _: Float) {
+        let c = fader  // 0-1 channel fader
+        // crossfader apply
+        var xfGain: Float = 1
+        if xfaderAssign == -1 { xfGain = 1 }
+        else if xfaderAssign == 0 { xfGain = (1 - crossfader) * 2 }
+        else { xfGain = crossfader * 2 }
+        channelMixer.volume = trim * c * xfGain
+        cueMixer.volume = cueOn ? 0.8 : 0
+    }
+    
+    func meter() -> Float {
+        guard let nodeTime = player.lastRenderTime,
+              let playerTime = player.playerTime(forNodeTime: nodeTime) else { return 0 }
+        // Simple peak simulation based on amplitude
+        amp = amp * 0.9 + (isPlaying ? 0.1 * Float.random(in: 0...0.3) : 0)
+        return min(amp, 1)
     }
     
     func load(url: URL) {
@@ -103,39 +233,30 @@ import AVFoundation
         defer { url.stopAccessingSecurityScopedResource() }
         do {
             let file = try AVAudioFile(forReading: url)
-            currentFile = file
-            fileName = url.lastPathComponent
+            currentFile = file; fileName = url.lastPathComponent
             duration = TimeInterval(file.length) / file.fileFormat.sampleRate
-            computeWaveform(file: file)
-            pausedAt = 0
-        } catch { print("load fail: \(error)") }
+            computeWaveform(file: file); pausedAt = 0
+        } catch { print("CH\(id) load: \(error)") }
     }
     
     func computeWaveform(file: AVAudioFile) {
-        let totalFrames = file.length
-        let targetSamples = 500
-        let chunkSize = min(Int64(65536), totalFrames)
-        guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(chunkSize)) else {
-            print("waveform: failed to alloc buffer")
-            return
-        }
-        waveform = []
-        var position: Int64 = 0
-        while position < totalFrames {
-            buf.frameLength = 0
-            file.framePosition = position
+        let total = file.length; let target = 400
+        let chunk = min(Int64(65536), total)
+        guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(chunk)) else { return }
+        waveform = []; var pos: Int64 = 0
+        while pos < total {
+            buf.frameLength = 0; file.framePosition = pos
             do { try file.read(into: buf) } catch { break }
-            guard buf.frameLength > 0, let data = buf.floatChannelData?[0] else { break }
+            guard buf.frameLength > 0, let d = buf.floatChannelData?[0] else { break }
             let frames = Int(buf.frameLength)
-            let samplesHere = max(1, targetSamples * frames / Int(totalFrames))
-            for i in 0..<samplesHere {
-                let start = i * frames / samplesHere
-                let end = (i + 1) * frames / samplesHere
+            let here = max(1, target * frames / Int(total))
+            for i in 0..<here {
+                let s = i * frames / here; let e = (i + 1) * frames / here
                 var peak: Float = 0
-                for j in start..<min(end, frames) { peak = max(peak, abs(data[j])) }
+                for j in s..<min(e, frames) { peak = max(peak, abs(d[j])) }
                 waveform.append(peak)
             }
-            position += Int64(buf.frameLength)
+            pos += Int64(buf.frameLength)
         }
         file.framePosition = 0
     }
@@ -143,141 +264,175 @@ import AVFoundation
     func startPlay() {
         guard let file = currentFile else { isPlaying = false; return }
         player.stop()
-        let startFrame = AVAudioFramePosition(pausedAt * file.fileFormat.sampleRate)
-        let framesToPlay = AVAudioFrameCount(file.length - startFrame)
-        if startFrame > 0 {
-            player.scheduleSegment(file, startingFrame: startFrame, frameCount: framesToPlay, at: nil)
-        } else {
-            player.scheduleFile(file, at: nil, completionHandler: nil)
-        }
+        let sf = AVAudioFramePosition(pausedAt * file.fileFormat.sampleRate)
+        let fp = AVAudioFrameCount(file.length - sf)
+        if sf > 0 { player.scheduleSegment(file, startingFrame: sf, frameCount: fp, at: nil) }
+        else { player.scheduleFile(file, at: nil, completionHandler: nil) }
         player.play()
     }
     
     func stopPlay() {
         player.stop()
-        if let file = currentFile, let lastTime = player.lastRenderTime?.sampleTime {
-            pausedAt = TimeInterval(lastTime) / file.fileFormat.sampleRate
-        } else {
-            pausedAt = 0
-        }
+        if let f = currentFile, let t = player.lastRenderTime?.sampleTime {
+            pausedAt = TimeInterval(t) / f.fileFormat.sampleRate
+        } else { pausedAt = 0 }
     }
     
     func updateEQ() {
-        eq.bands[0].gain = (loBand - 0.5) * 12
-        eq.bands[1].gain = (midBand - 0.5) * 12
-        eq.bands[2].gain = (hiBand - 0.5) * 12
+        // Pioneer DJM: +6dB boost to -∞ kill (value 0-1 maps to +6 to -∞)
+        func eqGain(_ v: Float) -> Float {
+            if v >= 0.5 { return (v - 0.5) * 12 }    // +0 to +6 dB
+            else if v > 0.48 { return 0 }
+            else { return -20 + (v / 0.48) * 20 }    // kill slope
+        }
+        eq.bands[2].gain = eqGain(lowKnob)
+        eq.bands[1].gain = eqGain(midKnob)
+        eq.bands[0].gain = eqGain(hiKnob)
     }
     
-    func seek(to time: TimeInterval) {
+    func seek(to t: TimeInterval) {
         guard currentFile != nil else { return }
-        pausedAt = max(0, min(time, duration))
+        pausedAt = max(0, min(t, duration))
         if isPlaying {
             player.stop()
-            let file = currentFile!
-            let startFrame = AVAudioFramePosition(pausedAt * file.fileFormat.sampleRate)
-            let framesToPlay = AVAudioFrameCount(file.length - startFrame)
-            if startFrame > 0 {
-                player.scheduleSegment(file, startingFrame: startFrame, frameCount: framesToPlay, at: nil)
-            } else {
-                player.scheduleFile(file, at: nil, completionHandler: nil)
-            }
+            let f = currentFile!
+            let sf = AVAudioFramePosition(pausedAt * f.fileFormat.sampleRate)
+            let fp = AVAudioFrameCount(f.length - sf)
+            if sf > 0 { player.scheduleSegment(f, startingFrame: sf, frameCount: fp, at: nil) }
+            else { player.scheduleFile(f, at: nil, completionHandler: nil) }
             player.play()
         }
     }
     
     func toggleCue() {
         guard currentFile != nil else { return }
-        if !isPlaying && cueSet {
-            // jump to cue and play
-            seek(to: cuePoint)
-            isPlaying = true
-            cueSet = false
-        } else {
-            // mark current position as cue
-            cuePoint = isPlaying ? currentTime : pausedAt
-            cueSet = true
-        }
-    }
-    
-    func updateEngine() {
-        // called via engine.updateMix
+        if !isPlaying && cueSet { seek(to: cuePoint); isPlaying = true; cueSet = false }
+        else { cuePoint = isPlaying ? currentTime : pausedAt; cueSet = true }
     }
 }
-
-
 
 // MARK: - Views
-
 struct ContentView: View {
-    @Binding var engine: AudioEngine
+    @Bindable var engine: AudioEngine
     
     var body: some View {
-        HStack(spacing: 0) {
-            DeckView(deck: engine.decks[0], color: .accentColor)
-            CrossfaderView(crossfader: $engine.crossfader, onDrag: { engine.updateMix() })
-            DeckView(deck: engine.decks[1], color: .orange)
+        VStack(spacing: 0) {
+            // Top label bar
+            HStack {
+                Text("DJM-TOUR1").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
+                Spacer()
+                Text("ALPHATHETA").font(.system(size: 9)).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12).padding(.top, 6)
+            
+            HStack(spacing: 0) {
+                // 4 channel strips
+                ForEach(Array(engine.channels.enumerated()), id: \.element.id) { i, ch in
+                    ChannelStripView(channel: ch, index: i, engine: engine)
+                    if i < 3 { Divider().frame(width: 1) }
+                }
+            }
+            
+            // Bottom section: Beat FX + Crossfader + Master/Booth
+            BottomSection(engine: engine)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(white: 0.08))
+        .preferredColorScheme(.dark)
     }
 }
 
-struct DeckView: View {
-    @Bindable var deck: Deck
-    let color: Color
-    @State private var showFilePicker = false
+// MARK: - Channel Strip
+struct ChannelStripView: View {
+    @Bindable var channel: Channel
+    let index: Int
+    @Bindable var engine: AudioEngine
+    @State private var showFile = false
     @State private var timer: Timer?
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 4) {
+            // Channel label + load
             HStack {
-                Text("Deck \(deck.id)").font(.caption).foregroundStyle(.secondary)
+                Text("CH\(index+1)").font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(Color(white: 0.6))
                 Spacer()
-                Text(deck.fileName).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                Button("○") { showFile = true }
+                    .buttonStyle(.borderless).font(.system(size: 7)).foregroundStyle(.secondary)
+            }.padding(.horizontal, 4).padding(.top, 4)
+            
+            // Waveform
+            WaveformMini(waveform: channel.waveform, progress: channel.duration > 0 ? channel.currentTime / channel.duration : 0,
+                         cueSet: channel.cueSet, cueProgress: channel.duration > 0 ? channel.cuePoint / channel.duration : 0,
+                         onTap: { p in channel.seek(to: p * channel.duration) })
+                .frame(height: 32).cornerRadius(3).padding(.horizontal, 4)
+            
+            // Transport
+            HStack(spacing: 2) {
+                Button(channel.isPlaying ? "■" : "▶") { channel.isPlaying.toggle() }
+                    .buttonStyle(.borderless).font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(channel.isPlaying ? .green : .white)
+                Button("CUE") { channel.toggleCue() }
+                    .buttonStyle(.borderless).font(.system(size: 7))
+                    .foregroundStyle(channel.cueSet ? .green : .secondary)
             }
             
-            WaveformView(
-                waveform: deck.waveform,
-                progress: deck.duration > 0 ? deck.currentTime / deck.duration : 0,
-                cueSet: deck.cueSet, cueProgress: deck.duration > 0 ? deck.cuePoint / deck.duration : 0,
-                onTap: { p in deck.seek(to: p * deck.duration) }
-            )
-                .frame(height: 72)
-                .cornerRadius(6)
-            
-            HStack(spacing: 4) {
-                Button(deck.isPlaying ? "❚❚" : "▶") { deck.isPlaying.toggle() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(deck.isPlaying ? color : .gray)
-                Button("Cue") { deck.toggleCue() }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                Button("⟳") {}
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                Button("Load") { showFilePicker = true }
-                    .buttonStyle(.borderless)
-                    .font(.caption)
+            // TRIM knob
+            VStack(spacing: 1) {
+                Text("TRIM").font(.system(size: 6)).foregroundStyle(Color(white: 0.5))
+                DialKnob(value: $channel.trim, range: 0...1.5, label: "")
+                    .frame(width: 28, height: 28)
             }
             
+            // EQ knobs
+            HStack(spacing: 1) {
+                EQKnob(label: "HI", value: $channel.hiKnob)
+                EQKnob(label: "MID", value: $channel.midKnob)
+                EQKnob(label: "LOW", value: $channel.lowKnob)
+            }
+            
+            // Color FX
+            HStack(spacing: 2) {
+                Button("CFX") { channel.colorFXOn.toggle() }
+                    .buttonStyle(.borderless).font(.system(size: 6))
+                    .foregroundStyle(channel.colorFXOn ? .cyan : .secondary)
+                DialKnob(value: $channel.fxSend, range: 0...1, label: "")
+                    .frame(width: 20, height: 20)
+            }
+            
+            // Channel fader (vertical)
             VStack(spacing: 2) {
-                FaderView(label: "Vol", value: $deck.volume, range: 0...1, color: color)
-                FaderView(label: "Hi", value: $deck.hiBand, range: 0...1, color: .purple)
-                FaderView(label: "Mid", value: $deck.midBand, range: 0...1, color: .purple)
-                FaderView(label: "Lo", value: $deck.loBand, range: 0...1, color: .purple)
+                LevelMeter(level: engine.channelPeaks[index])
+                    .frame(width: 4, height: 40)
+                Text(String(format: "%.0f", channel.fader * 100))
+                    .font(.system(size: 6)).foregroundStyle(Color(white: 0.4))
+                Slider(value: $channel.fader, in: 0...1)
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 60, height: 12)
+            }
+            
+            // Cue + XFader assign
+            HStack(spacing: 2) {
+                Button("C") { channel.cueOn.toggle() }
+                    .buttonStyle(.borderless).font(.system(size: 7))
+                    .foregroundStyle(channel.cueOn ? .blue : .secondary)
+                Picker("", selection: $channel.xfaderAssign) {
+                    Text("THRU").tag(-1)
+                    Text("A").tag(0)
+                    Text("B").tag(1)
+                }.pickerStyle(.segmented).scaleEffect(0.7).frame(width: 60)
             }
         }
-        .padding(12)
-        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.controlBackgroundColor).opacity(0.5))
-        .cornerRadius(10)
-        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.audio]) { result in
-            if case .success(let url) = result { deck.load(url: url) }
+        .frame(minWidth: 0, maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .background(index % 2 == 0 ? Color(white: 0.1) : Color(white: 0.09))
+        .fileImporter(isPresented: $showFile, allowedContentTypes: [.audio]) { r in
+            if case .success(let u) = r { channel.load(url: u) }
         }
         .onAppear {
             timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-                if deck.isPlaying, let nodeTime = deck.player.lastRenderTime,
-                   let playerTime = deck.player.playerTime(forNodeTime: nodeTime) {
-                    deck.currentTime = Double(playerTime.sampleTime) / playerTime.sampleRate
+                if channel.isPlaying, let nt = channel.player.lastRenderTime,
+                   let pt = channel.player.playerTime(forNodeTime: nt) {
+                    channel.currentTime = Double(pt.sampleTime) / pt.sampleRate
                 }
             }
         }
@@ -285,35 +440,99 @@ struct DeckView: View {
     }
 }
 
-struct WaveformView: View {
-    let waveform: [Float]
-    let progress: Double
-    let cueSet: Bool
-    let cueProgress: Double
-    let onTap: (Double) -> Void
+// MARK: - Sub-Views
+struct DialKnob: View {
+    @Binding var value: Float
+    let range: ClosedRange<Float>
+    let label: String
+    
+    var body: some View {
+        VStack(spacing: 1) {
+            if !label.isEmpty { Text(label).font(.system(size: 6)).foregroundStyle(Color(white: 0.5)) }
+            ZStack {
+                Circle().stroke(Color(white: 0.2), lineWidth: 2)
+                Circle().trim(from: 0, to: CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound)))
+                    .stroke(Color.blue, lineWidth: 2).rotationEffect(.degrees(-90))
+                Circle().fill(Color(white: 0.15)).frame(width: 14, height: 14)
+            }
+            .gesture(DragGesture().onChanged { g in
+                let delta = Float(g.translation.height) * -0.008
+                value = max(range.lowerBound, min(range.upperBound, value + delta))
+            })
+        }
+    }
+}
+
+struct EQKnob: View {
+    let label: String
+    @Binding var value: Float
+    
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(label).font(.system(size: 6)).foregroundStyle(Color(white: 0.5))
+            ZStack {
+                Circle().stroke(value > 0.48 && value < 0.52 ? Color(white: 0.25) : Color.blue, lineWidth: 2)
+                Circle().trim(from: 0, to: CGFloat(abs(value - 0.5) * 2))
+                    .stroke(value > 0.5 ? Color.orange : Color.red, lineWidth: 2)
+                    .rotationEffect(.degrees(value > 0.5 ? -90 : 90))
+                Circle().fill(Color(white: 0.12)).frame(width: 12, height: 12)
+                if value > 0.48 && value < 0.52 {
+                    Circle().fill(Color(white: 0.3)).frame(width: 2, height: 2)
+                }
+            }.frame(width: 24, height: 24)
+            .gesture(DragGesture().onChanged { g in
+                let delta = Float(g.translation.height) * -0.006
+                value = max(0, min(1, value + delta))
+            })
+        }
+    }
+}
+
+struct LevelMeter: View {
+    let level: Float
+    
+    var body: some View {
+        GeometryReader { geo in
+            let h = geo.size.height
+            VStack(spacing: 1) {
+                Rectangle().fill(level > 0.85 ? Color.red : Color(white: 0.15)).frame(height: h * 0.2)
+                Rectangle().fill(level > 0.7 ? Color.orange : Color(white: 0.15)).frame(height: h * 0.2)
+                Rectangle().fill(level > 0.5 ? Color.yellow : Color(white: 0.15)).frame(height: h * 0.2)
+                Rectangle().fill(level > 0.2 ? Color.green : Color(white: 0.15)).frame(height: h * 0.4)
+            }
+        }
+    }
+}
+
+struct WaveformMini: View {
+    let waveform: [Float]; let progress: Double
+    let cueSet: Bool; let cueProgress: Double; let onTap: (Double) -> Void
     
     var body: some View {
         GeometryReader { geo in
             if waveform.isEmpty {
-                Text("Load a track").font(.caption).foregroundStyle(.tertiary)
+                Text("---").font(.system(size: 7)).foregroundStyle(Color(white: 0.3))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Canvas { ctx, size in
-                    let barW = size.width / CGFloat(waveform.count)
-                    for (i, peak) in waveform.enumerated() {
-                        let barH = CGFloat(peak) * size.height * 0.9
-                        let rect = CGRect(x: CGFloat(i) * barW, y: (size.height - barH) / 2, width: max(barW - 0.5, 1), height: max(barH, 1))
-                        ctx.fill(Path(roundedRect: rect, cornerSize: CGSize(width: 0.5, height: 0.5)), with: .color(peak > 0.3 ? .orange : .purple))
+                ZStack(alignment: .topLeading) {
+                    Canvas { ctx, size in
+                        let bw = size.width / CGFloat(waveform.count)
+                        for (i, p) in waveform.enumerated() {
+                            let bh = CGFloat(p) * size.height * 0.8
+                            let r = CGRect(x: CGFloat(i) * bw, y: (size.height - bh) / 2, width: max(bw - 0.3, 0.5), height: max(bh, 0.5))
+                            ctx.fill(Path(roundedRect: r, cornerSize: CGSize(width: 0.3, height: 0.3)), with: .color(Color.orange.opacity(0.7)))
+                        }
                     }
                     // cue line
                     if cueSet {
-                        let cx = size.width * cueProgress
-                        ctx.stroke(Path(CGPath(rect: CGRect(x: cx, y: 0, width: 2, height: size.height), transform: nil)), with: .color(.green))
+                        Rectangle().fill(.green).frame(width: 1.5)
+                            .offset(x: geo.size.width * cueProgress)
                     }
                     // progress line
-                    let px = size.width * progress
-                    ctx.stroke(Path(CGPath(rect: CGRect(x: px, y: 0, width: 1, height: size.height), transform: nil)), with: .color(.white))
+                    Rectangle().fill(.white).frame(width: 1)
+                        .offset(x: geo.size.width * progress)
                 }
+                .contentShape(Rectangle())
                 .onTapGesture { loc in
                     let w = geo.size.width
                     if w > 0 { onTap(loc.x / w) }
@@ -323,37 +542,100 @@ struct WaveformView: View {
     }
 }
 
-struct FaderView: View {
-    let label: String
-    @Binding var value: Float
-    let range: ClosedRange<Float>
-    let color: Color
+// MARK: - Bottom Section
+struct BottomSection: View {
+    @Bindable var engine: AudioEngine
     
     var body: some View {
-        HStack(spacing: 4) {
-            Text(label).font(.system(size: 8, weight: .medium)).foregroundStyle(.secondary).frame(width: 20)
-            Slider(value: $value, in: range)
-                .tint(label == "Vol" ? color : .purple)
-                .controlSize(.mini)
+        HStack(spacing: 0) {
+            // Beat FX
+            BeatFXView(engine: engine)
+                .frame(width: 300)
+            Divider()
+            // Crossfader
+            VStack(spacing: 4) {
+                HStack(spacing: 20) {
+                    HStack { Text("A").font(.system(size: 8)).foregroundStyle(.secondary)
+                        Slider(value: $engine.crossfader, in: 0...1).frame(width: 100)
+                        Text("B").font(.system(size: 8)).foregroundStyle(.secondary)
+                    }
+                    Text("CURVE").font(.system(size: 7)).foregroundStyle(.secondary)
+                    Slider(value: $engine.crossfaderCurve, in: 0...1).frame(width: 60)
+                }
+                .onChange(of: engine.crossfader) { _, _ in engine.updateMix() }
+                .onChange(of: engine.crossfaderCurve) { _, _ in engine.updateMix() }
+            }
+            .frame(maxWidth: .infinity).padding(.horizontal, 12)
+            Divider()
+            // Master + Booth
+            MasterSection(engine: engine)
+                .frame(width: 160)
         }
+        .frame(height: 100).padding(.horizontal, 4)
+        .background(Color(white: 0.07))
     }
 }
 
-struct CrossfaderView: View {
-    @Binding var crossfader: Float
-    let onDrag: () -> Void
+struct BeatFXView: View {
+    @Bindable var engine: AudioEngine
     
     var body: some View {
-        VStack(spacing: 6) {
-            Text("A").font(.caption2).foregroundStyle(crossfader < 0.5 ? .orange : .secondary)
-            Slider(value: $crossfader, in: 0...1)
-                .onChange(of: crossfader) { _, _ in onDrag() }
-                .controlSize(.small)
-                .rotationEffect(.degrees(-90))
-                .frame(width: 160)
-            Text("B").font(.caption2).foregroundStyle(crossfader > 0.5 ? .orange : .secondary)
-        }
-        .frame(width: 40)
-        .padding(.vertical, 8)
+        VStack(spacing: 4) {
+            HStack {
+                Text("BEAT FX").font(.system(size: 8, weight: .bold)).foregroundStyle(.blue)
+                Spacer()
+                Button(engine.fxOn ? "ON" : "OFF") { engine.fxOn.toggle(); engine.updateMix() }
+                    .buttonStyle(.borderless).font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(engine.fxOn ? .green : .secondary)
+            }
+            HStack(spacing: 4) {
+                VStack(spacing: 2) {
+                    Text("TYPE").font(.system(size: 6)).foregroundStyle(.secondary)
+                    Picker("", selection: $engine.fxType) {
+                        ForEach(FXType.allCases, id: \.self) { t in Text(t.rawValue.uppercased()).font(.system(size: 8)).tag(t) }
+                    }.pickerStyle(.menu).scaleEffect(0.7)
+                }
+                VStack(spacing: 2) {
+                    Text("PARAM").font(.system(size: 6)).foregroundStyle(.secondary)
+                    DialKnob(value: $engine.fxParam, range: 0...1, label: "").frame(width: 24, height: 24)
+                        .onChange(of: engine.fxParam) { _, _ in engine.updateMix() }
+                }
+                VStack(spacing: 2) {
+                    Text("BEAT").font(.system(size: 6)).foregroundStyle(.secondary)
+                    Picker("", selection: $engine.fxBeat) {
+                        ForEach(FXBeat.allCases, id: \.self) { b in Text(b.rawValue).font(.system(size: 7)).tag(b) }
+                    }.pickerStyle(.menu).scaleEffect(0.7)
+                }
+            }
+            HStack(spacing: 4) {
+                ForEach(0..<4) { i in
+                    Button("CH\(i+1)") { engine.fxChannels[i].toggle() }
+                        .buttonStyle(.borderless).font(.system(size: 7))
+                        .foregroundStyle(engine.fxChannels[i] ? .blue : .secondary)
+                }
+            }
+        }.padding(6)
+    }
+}
+
+struct MasterSection: View {
+    @Bindable var engine: AudioEngine
+    
+    var body: some View {
+        VStack(spacing: 3) {
+            HStack {
+                Text("MASTER").font(.system(size: 8, weight: .bold)).foregroundStyle(Color(white: 0.7))
+                LevelMeter(level: engine.masterPeak).frame(width: 4, height: 24)
+                DialKnob(value: $engine.masterVolume, range: 0...1, label: "").frame(width: 20, height: 20)
+                    .onChange(of: engine.masterVolume) { _, _ in engine.updateMix() }
+            }
+            HStack {
+                Text("BOOTH").font(.system(size: 8)).foregroundStyle(.secondary)
+                DialKnob(value: $engine.boothVolume, range: 0...1, label: "").frame(width: 20, height: 20)
+                    .onChange(of: engine.boothVolume) { _, _ in engine.updateMix() }
+                Text("REC").font(.system(size: 8)).foregroundStyle(.secondary)
+                Button("●") {}.buttonStyle(.borderless).font(.system(size: 8)).foregroundStyle(.red)
+            }
+        }.padding(6)
     }
 }
