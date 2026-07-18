@@ -81,8 +81,7 @@ import AVFoundation
     
     func updateMix() {
         for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
-        masterMixer.volume = 0.85  // force fixed volume
-        masterVolume = 0.85
+        masterMixer.volume = masterVolume
         fx.on = fxOn
         // Effective BPM per channel: override or detected
         let loaded = channels.filter { $0.currentFile != nil }
@@ -195,7 +194,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var cueSet = false
     var waveform: [Float] = []
     var fileName: String = ""
-    var bpmOverride: Float = -1 { didSet { onUpdate?() } }  // -1 = use detected BPM
+    var bpmOverride: Float = -1  // -1 = use detected BPM
     var onUpdate: (() -> Void)?
     var onLoad: ((TrackRecord) -> Void)?
     
