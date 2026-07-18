@@ -49,7 +49,7 @@ struct TrackRecord: Codable, Identifiable, Hashable {
     }
     
     static func from(url: URL, duration: TimeInterval) -> Self? {
-        guard let data = try? url.bookmarkData(options: .minimalBookmark,
+        guard let data = try? url.bookmarkData(options: .withSecurityScope,
                                                 includingResourceValuesForKeys: nil,
                                                 relativeTo: nil) else { return nil }
         return TrackRecord(id: UUID(), name: url.lastPathComponent,

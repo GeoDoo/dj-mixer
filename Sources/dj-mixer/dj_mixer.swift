@@ -260,14 +260,14 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     
     func loadFromLibrary(track: TrackRecord) {
         guard let url = track.resolveURL() else { return }
-        _ = url.startAccessingSecurityScopedResource()
+        scopeURL?.stopAccessingSecurityScopedResource()
+        guard url.startAccessingSecurityScopedResource() else { return }
         scopeURL = url
         do {
             let file = try AVAudioFile(forReading: url)
             currentFile = file; fileName = track.name
             duration = track.duration
             computeWaveform(file: file); pausedAt = 0
-            // Don't re-save — already in library
         } catch { print("CH\(id) lib load: \(error)") }
     }
     
