@@ -206,7 +206,7 @@ function setFader(v){
 }
 
 function setEQ(deck){
-  const p=deckParams[deck];
+  const p=deckParams[deck.deck];
   deck.eqLo.gain.value=p.lo*12-6;   // -6 to +6 dB
   deck.eqMid.gain.value=p.mid*12-6;
   deck.eqHi.gain.value=p.hi*12-6;
