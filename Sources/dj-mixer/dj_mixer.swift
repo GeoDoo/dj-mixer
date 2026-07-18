@@ -259,24 +259,13 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     func startPlay() {
         guard let file = currentFile else { isPlaying = false; return }
         player.stop()
-        // Generate a test tone to verify audio chain
-        let fmt = file.processingFormat
-        let sr = fmt.sampleRate
-        let genFrames = AVAudioFrameCount(min(44100, file.length))
-        guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: genFrames) else { isPlaying = false; return }
-        buf.frameLength = genFrames
-        if let ch = buf.floatChannelData?[0] {
-            for i in 0..<Int(genFrames) {
-                let t = Double(i) / sr
-                ch[i] = Float(sin(2.0 * .pi * 440.0 * t)) * 0.3
-            }
+        let startFrame = AVAudioFramePosition(pausedAt * file.fileFormat.sampleRate)
+        let framesToPlay = AVAudioFrameCount(file.length - startFrame)
+        if startFrame > 0 {
+            player.scheduleSegment(file, startingFrame: startFrame, frameCount: framesToPlay, at: nil)
+        } else {
+            player.scheduleFile(file, at: nil, completionHandler: nil)
         }
-        let ch2 = buf.floatChannelData?[1]
-        if ch2 != nil {
-            let src = buf.floatChannelData![0]
-            for i in 0..<Int(genFrames) { ch2![i] = src[i] }
-        }
-        player.scheduleBuffer(buf, at: nil, options: .loops, completionHandler: nil)
         player.play()
     }
     
