@@ -596,6 +596,7 @@ struct LibraryView: View {
                             ForEach(0..<4) { i in
                                 Button("CH\(i+1)") {
                                     if let url = track.resolveURL() {
+                                        _ = url.startAccessingSecurityScopedResource()
                                         engine.channels[i].load(url: url)
                                         dismiss()
                                     }
