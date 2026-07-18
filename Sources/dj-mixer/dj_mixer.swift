@@ -58,7 +58,8 @@ import AVFoundation
             ch.onLoad = { [weak self] rec in
                 guard let s = self else { return }
                 var newLib = s.library
-                if !newLib.tracks.contains(where: { $0.id == rec.id }) {
+                // dedupe by bookmark data (same file)
+                if !newLib.tracks.contains(where: { $0.bookmarkData == rec.bookmarkData }) {
                     newLib.tracks.insert(rec, at: 0)
                 }
                 s.library = newLib
@@ -255,6 +256,19 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
                 onLoad?(rec)
             }
         } catch { print("CH\(id) load: \(error)") }
+    }
+    
+    func loadFromLibrary(track: TrackRecord) {
+        guard let url = track.resolveURL() else { return }
+        _ = url.startAccessingSecurityScopedResource()
+        scopeURL = url
+        do {
+            let file = try AVAudioFile(forReading: url)
+            currentFile = file; fileName = track.name
+            duration = track.duration
+            computeWaveform(file: file); pausedAt = 0
+            // Don't re-save — already in library
+        } catch { print("CH\(id) lib load: \(error)") }
     }
     
     func computeWaveform(file: AVAudioFile) {
@@ -557,33 +571,45 @@ struct LibraryView: View {
             }.padding()
             
             if engine.library.tracks.isEmpty {
-                Text("No tracks in library. Load a track into any channel to add it.")
+                Text("No tracks. Load a track into any channel — it saves automatically.")
                     .font(.body).foregroundStyle(.secondary).padding()
                 Spacer()
             } else {
                 List(engine.library.tracks) { track in
                     HStack {
-                        Text(track.name).font(.body)
+                        Text(track.name).font(.body).lineLimit(1)
                         Spacer()
-                        Text(String(format: "%.0fs", track.duration)).font(.caption).foregroundStyle(.secondary)
-                        Text(track.added, style: .date).font(.caption2).foregroundStyle(.tertiary)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        // Load track into first available channel
-                        if let url = track.resolveURL() {
-                            _ = url.startAccessingSecurityScopedResource()
-                            engine.channels[0].load(url: url)
-                            dismiss()
+                        Text(formatTime(track.duration)).font(.caption).foregroundStyle(.secondary).frame(width: 40)
+                        // Load into channel buttons
+                        HStack(spacing: 2) {
+                            ForEach(0..<4) { i in
+                                Button("CH\(i+1)") {
+                                    engine.channels[i].loadFromLibrary(track: track)
+                                    dismiss()
+                                }
+                                .buttonStyle(.bordered).tint(.gray).font(.system(size: 8)).controlSize(.mini)
+                            }
                         }
+                        Button("✕") {
+                            var lib = engine.library
+                            lib.tracks.removeAll(where: { $0.id == track.id })
+                            engine.library = lib
+                            LibraryManager.default.save(lib)
+                        }
+                        .buttonStyle(.borderless).font(.system(size: 10)).foregroundStyle(.red)
                     }
                 }
-                .frame(minWidth: 400, minHeight: 300)
+                .frame(minWidth: 500, minHeight: 250)
             }
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 600, height: 350)
         .background(Color(white: 0.12))
         .preferredColorScheme(.dark)
+    }
+    
+    func formatTime(_ t: TimeInterval) -> String {
+        let m = Int(t) / 60; let s = Int(t) % 60
+        return "\(m):\(String(format: "%02d", s))"
     }
 }
 
