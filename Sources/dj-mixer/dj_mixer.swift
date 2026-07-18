@@ -68,6 +68,27 @@ import AVFoundation
                 LibraryManager.default.save(newLib)
             }
         }
+        for ch in channels {
+            ch.onReconnect = { [weak self] in
+                guard let s = self else { return }
+                s.reconnectChannel(ch.id)
+            }
+        }
+    }
+    
+    var timePitchConnected = false
+    
+    func reconnectChannel(_ id: Int) {
+        let ch = channels[id]
+        let fmt = avEngine.outputNode.outputFormat(forBus: 0)
+        avEngine.disconnectNodeInput(ch.eq)
+        avEngine.connect(ch.player, to: ch.timePitch, format: fmt)
+        avEngine.connect(ch.timePitch, to: ch.eq, format: fmt)
+        ch.timePitch.bypass = false
+        ch.timePitch.pitch = 0
+        ch.timePitch.rate = ch.bpmOverride > 0 ? ch.bpmOverride / Float(ch.bpm) : 1.0
+        timePitchConnected = true
+        updateMix()
     }
     
     func saveLibrary() {
@@ -164,6 +185,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
 @Observable class Channel: Identifiable {
     let id: Int
     var player = AVAudioPlayerNode()
+    let timePitch = AVAudioUnitTimePitch()
     var eq: AVAudioUnitEQ
     var trimMixer = AVAudioMixerNode()
     var channelMixer = AVAudioMixerNode()
@@ -194,9 +216,13 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     var cueSet = false
     var waveform: [Float] = []
     var fileName: String = ""
-    var bpmOverride: Float = -1  // -1 = use detected BPM
+    var bpmOverride: Float = -1 { didSet { 
+        if bpmOverride >= 0 { onReconnect?() }
+        else { onUpdate?() }
+    } }  // -1 = use detected BPM
     var onUpdate: (() -> Void)?
     var onLoad: ((TrackRecord) -> Void)?
+    var onReconnect: (() -> Void)?
     
     var displayName: String {
         fileName.isEmpty ? "CH \(id + 1)" : fileName
@@ -205,6 +231,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     init(id: Int) {
         self.id = id
         eq = AVAudioUnitEQ(numberOfBands: 3)
+        timePitch.overlap = 8; timePitch.pitch = 0; timePitch.rate = 1.0
         let cfgs: [(AVAudioUnitEQFilterType, Float, Float)] = [(.highShelf, 7000, 0.5), (.parametric, 1200, 0.7), (.lowShelf, 200, 0.5)]
         for (i, (t, f, b)) in cfgs.enumerated() {
             eq.bands[i].filterType = t; eq.bands[i].frequency = f
@@ -214,7 +241,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     }
     
     func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
-        engine.attach(player); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
+        engine.attach(player); engine.attach(timePitch); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
         engine.connect(player, to: eq, format: nil)
         engine.connect(eq, to: trimMixer, format: nil)
         engine.connect(trimMixer, to: channelMixer, format: nil)
@@ -255,8 +282,8 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             currentFile = file; fileName = loadURL.lastPathComponent
             duration = TimeInterval(file.length) / file.fileFormat.sampleRate
             pausedAt = 0
-            // Compute waveform + BPM in a single file pass
             computeAll(file: file, loadURL: loadURL)
+            onReconnect?()  // reconnect with timePitch now that player has format
         } catch { print("CH\(id) load: \(error)") }
     }
     
@@ -267,6 +294,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             currentFile = file; fileName = track.name
             duration = track.duration; pausedAt = 0
             computeAll(file: file, loadURL: url)
+            onReconnect?()
         } catch { print("CH\(id) lib: \(error)") }
     }
     
