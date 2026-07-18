@@ -52,7 +52,8 @@ import AVFoundation
     init() {
         fx = BeatFXProcessor(engine: avEngine)
         avEngine.attach(masterMixer)
-        avEngine.connect(masterMixer, to: avEngine.outputNode, format: nil)
+        avEngine.connect(masterMixer, to: fx.inputMixer, format: nil)
+        avEngine.connect(fx.outputMixer, to: avEngine.outputNode, format: nil)
         for ch in channels { ch.attach(to: avEngine, master: masterMixer) }
         for ch in channels { ch.onUpdate = { [weak self] in self?.updateMix() } }
         for ch in channels {
@@ -80,6 +81,8 @@ import AVFoundation
     func updateMix() {
         for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
         masterMixer.volume = masterVolume
+        fx.on = fxOn
+        fx.apply(type: fxType, param: fxParam, beat: fxBeat)
     }
     
     func startMeterTimer() {
@@ -99,8 +102,47 @@ enum FXType: String, CaseIterable { case delay, echo, reverb, flanger, phaser, f
 enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = "1/4", eighth = "1/8", sixteenth = "1/16" }
 
 @Observable class BeatFXProcessor {
-    init(engine: AVAudioEngine) { self.engine = engine }
     let engine: AVAudioEngine
+    let inputMixer = AVAudioMixerNode()
+    let outputMixer = AVAudioMixerNode()
+    let delay = AVAudioUnitDelay()
+    let reverb = AVAudioUnitReverb()
+    let distortion = AVAudioUnitDistortion()
+    var on: Bool = false
+    
+    init(engine: AVAudioEngine) {
+        self.engine = engine
+        engine.attach(inputMixer); engine.attach(outputMixer)
+        engine.attach(delay); engine.attach(reverb); engine.attach(distortion)
+        // Inline series: input → delay → reverb → distortion → output
+        engine.connect(inputMixer, to: delay, format: nil)
+        engine.connect(delay, to: reverb, format: nil)
+        engine.connect(reverb, to: distortion, format: nil)
+        engine.connect(distortion, to: outputMixer, format: nil)
+        delay.wetDryMix = 0; delay.lowPassCutoff = 15000
+        reverb.wetDryMix = 0; reverb.loadFactoryPreset(.cathedral)
+        distortion.wetDryMix = 0; distortion.loadFactoryPreset(.drumsLoFi)
+    }
+    
+    func apply(type: FXType, param: Float, beat: FXBeat) {
+        let bpm: Double = [.whole: 4, .half: 2, .quarter: 1, .eighth: 0.5, .sixteenth: 0.25][beat] ?? 1
+        let wet = on ? param : 0
+        delay.wetDryMix = 0; reverb.wetDryMix = 0; distortion.wetDryMix = 0
+        switch type {
+        case .delay, .echo:
+            delay.delayTime = bpm
+            delay.feedback = Float(param) * 80
+            delay.wetDryMix = Float(wet) * 50
+        case .reverb: reverb.wetDryMix = Float(wet) * 60
+        case .flanger:
+            delay.delayTime = 0.003; delay.feedback = Float(param) * 60
+            delay.wetDryMix = Float(wet) * 50
+        case .phaser: distortion.loadFactoryPreset(.drumsLoFi); distortion.wetDryMix = Float(wet) * 50
+        case .filter: delay.lowPassCutoff = Float(param) * 20000 + 100; delay.wetDryMix = Float(wet) * 100
+        case .crush: distortion.loadFactoryPreset(.drumsLoFi); distortion.wetDryMix = Float(wet) * 60
+        case .space: reverb.loadFactoryPreset(.largeHall); reverb.wetDryMix = Float(wet) * 70
+        }
+    }
 }
 
 // MARK: - Channel (deck)
