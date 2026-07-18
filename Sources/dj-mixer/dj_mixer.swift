@@ -347,13 +347,14 @@ struct ChannelStripView: View {
     @State private var timer: Timer?
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
+            // Channel header
             HStack {
-                Text("CH \(index+1)").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(white: 0.65))
+                Text("CH \(index+1)").font(.system(size: 13, weight: .bold)).foregroundStyle(Color(white: 0.7))
                 Spacer()
-                Button("📁") { showFile = true }
-                    .buttonStyle(.borderless).font(.system(size: 13)).foregroundStyle(Color(white: 0.5))
-            }.padding(.horizontal, 10).padding(.top, 8)
+                Button("Load") { showFile = true }
+                    .buttonStyle(.bordered).tint(.gray).font(.system(size: 10)).controlSize(.small)
+            }.padding(.horizontal, 10).padding(.top, 6)
             
             // Waveform
             WaveformMini(waveform: channel.waveform,
@@ -361,60 +362,56 @@ struct ChannelStripView: View {
                 cueSet: channel.cueSet,
                 cueProgress: channel.duration > 0 ? channel.cuePoint / channel.duration : 0,
                 onTap: { p in channel.seek(to: p * channel.duration) })
-                .frame(height: 48).cornerRadius(6).padding(.horizontal, 10)
+                .frame(height: 44)
+                .cornerRadius(5)
+                .padding(.horizontal, 10)
             
             // Transport
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Button(channel.isPlaying ? "⏹" : "▶") { channel.isPlaying.toggle() }
-                    .buttonStyle(.borderedProminent).tint(channel.isPlaying ? .green : .gray).font(.system(size: 13))
+                    .buttonStyle(.borderedProminent).tint(channel.isPlaying ? .green : .gray).font(.system(size: 12)).controlSize(.small)
                 Button("CUE") { channel.toggleCue() }
-                    .buttonStyle(.bordered).tint(channel.cueSet ? .green : .gray).font(.system(size: 11))
+                    .buttonStyle(.bordered).tint(channel.cueSet ? .green : .gray).font(.system(size: 10)).controlSize(.small)
                 Spacer()
                 Text(channel.fileName).font(.system(size: 9)).foregroundStyle(Color(white: 0.4)).lineLimit(1)
             }.padding(.horizontal, 10)
             
-            // TRIM + EQ
-            HStack(spacing: 12) {
-                VStack(spacing: 3) {
-                    Text("TRIM").font(.system(size: 8)).foregroundStyle(Color(white: 0.5))
-                    DialKnob(value: $channel.trim, range: 0...1.5).frame(width: 38, height: 38)
-                }
+            Divider().background(Color(white: 0.15)).padding(.horizontal, 8)
+            
+            // EQ row
+            HStack(spacing: 16) {
                 Spacer()
                 EQKnob(label: "HI", value: $channel.hiKnob)
                 EQKnob(label: "MID", value: $channel.midKnob)
                 EQKnob(label: "LOW", value: $channel.lowKnob)
                 Spacer()
-                VStack(spacing: 3) {
-                    Text("CFX").font(.system(size: 8)).foregroundStyle(Color(white: 0.5))
-                    DialKnob(value: $channel.fxSend, range: 0...1).frame(width: 28, height: 28)
-                }
-            }.padding(.horizontal, 10)
+            }
             
-            // Level meter + Master fader
+            Divider().background(Color(white: 0.15)).padding(.horizontal, 8)
+            
+            // Fader + meter
             HStack(spacing: 10) {
-                LevelMeter(level: engine.channelPeaks[index]).frame(width: 8, height: 70)
-                VStack(spacing: 3) {
-                    Text("\(Int(channel.fader * 100))").font(.system(size: 10, weight: .medium))
+                LevelMeter(level: engine.channelPeaks[index])
+                    .frame(width: 8, height: 80)
+                VStack(spacing: 2) {
+                    Text("\(Int(channel.fader * 100))").font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color(white: 0.6))
                     Slider(value: $channel.fader, in: 0...1)
                         .tint(.blue)
                 }
-                VStack(spacing: 6) {
-                    Button("C") { channel.cueOn.toggle() }
-                        .buttonStyle(.bordered).tint(channel.cueOn ? .blue : .gray).font(.system(size: 9))
-                    Picker("", selection: $channel.xfaderAssign) {
-                        Text("THRU").tag(-1)
-                        Text("A").tag(0)
-                        Text("B").tag(1)
-                    }.pickerStyle(.segmented).frame(width: 80)
-                }.frame(width: 50)
-            }.padding(.horizontal, 10)
+            }
+            .padding(.horizontal, 12)
+            
+            // Track info
+            Text(channel.fileName.isEmpty ? " " : channel.fileName)
+                .font(.system(size: 8)).foregroundStyle(Color(white: 0.35))
+                .lineLimit(1).padding(.horizontal, 10)
         }
-        .frame(minWidth: 240)
-        .padding(.vertical, 8)
+        .frame(minWidth: 260)
+        .padding(.vertical, 6)
         .background(Color(white: index % 2 == 0 ? 0.12 : 0.1))
-        .cornerRadius(6)
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(white: 0.18), lineWidth: 1))
+        .cornerRadius(8)
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(white: 0.18), lineWidth: 1))
         .fileImporter(isPresented: $showFile, allowedContentTypes: [.audio]) { r in
             if case .success(let u) = r { channel.load(url: u) }
         }
