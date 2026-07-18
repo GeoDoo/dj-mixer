@@ -219,6 +219,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     init(id: Int) {
         self.id = id
         eq = AVAudioUnitEQ(numberOfBands: 3)
+        timePitch.overlap = 8; timePitch.pitch = 0; timePitch.rate = 1.0
         let cfgs: [(AVAudioUnitEQFilterType, Float, Float)] = [(.highShelf, 7000, 0.5), (.parametric, 1200, 0.7), (.lowShelf, 200, 0.5)]
         for (i, (t, f, b)) in cfgs.enumerated() {
             eq.bands[i].filterType = t; eq.bands[i].frequency = f
