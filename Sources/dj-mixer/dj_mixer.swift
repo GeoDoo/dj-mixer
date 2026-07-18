@@ -228,9 +228,8 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     
     func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
         engine.attach(player); engine.attach(timePitch); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
-        let fmt = engine.outputNode.outputFormat(forBus: 0)
-        engine.connect(player, to: timePitch, format: fmt)
-        engine.connect(timePitch, to: eq, format: fmt)
+        engine.connect(player, to: timePitch, format: nil)
+        engine.connect(timePitch, to: eq, format: nil)
         engine.connect(trimMixer, to: channelMixer, format: nil)
         engine.connect(channelMixer, to: master, format: nil)
         engine.connect(cueMixer, to: master, format: nil)
@@ -241,6 +240,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             for i in 0..<Int(buf.frameLength) { pk = max(pk, abs(d[i])) }
             s.meterVal = min(pk * 2, 1)
         }
+        timePitch.bypass = false
     }
     
     private var meterVal: Float = 0
