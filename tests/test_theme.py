@@ -1,20 +1,21 @@
-"""Theme toggle tests: light mode exists, swaps CSS vars, has a toggle."""
-def test_stylesheet_has_light_vars():
-    css = open('styles.css').read()
-    assert '.light' in css or '.light-mode' in css, 'no light class in CSS'
-    assert '--bg:' in css, '--bg variable defined'
+"""Light mode is the default theme."""
+import re
 
-def test_light_mode_inverts_bg_and_ink():
+def test_default_theme_is_light():
     css = open('styles.css').read()
-    # Find both dark and light definitions for --bg and --ink
-    import re
-    # In light mode, bg should be light (high L in oklch) and ink dark (low L)
-    light_bg = re.search(r'\.light[^}]*--bg:\s*(oklch[^;]+)', css, re.DOTALL)
-    light_ink = re.search(r'\.light[^}]*--ink:\s*(oklch[^;]+)', css, re.DOTALL)
-    assert light_bg, 'light mode --bg not defined'
-    assert light_ink, 'light mode --ink not defined'
+    # --bg should be light (high L > 0.80)
+    bg_match = re.search(r'--bg:\s*(oklch\([^)]+\))', css)
+    assert bg_match, '--bg not found in :root'
+    val = bg_match.group(1)
+    # Extract L value from oklch
+    l_val = float(val.split()[0].replace('oklch(',''))
+    assert l_val > 0.80, f'default --bg is dark ({l_val}), expected light'
 
-def test_theme_toggle_button_exists():
-    html = open('index.html').read()
-    assert 'theme' in html.lower() or 'light' in html.lower() or 'toggle' in html.lower(), \
-        'no theme toggle in HTML'
+def test_light_ink_is_dark():
+    # Light mode means dark text (low L < 0.30)
+    css = open('styles.css').read()
+    ink_match = re.search(r'--ink:\s*(oklch\([^)]+\))', css)
+    assert ink_match, '--ink not found'
+    val = ink_match.group(1)
+    l_val = float(val.split()[0].replace('oklch(',''))
+    assert l_val < 0.30, f'--ink is light ({l_val}), expected dark for readability'
