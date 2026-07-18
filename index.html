@@ -19,11 +19,11 @@
       <button class="ctrl-btn-sm" id="loop-a" title="Loop">⟳</button>
     </div>
     <div class="knob-row">
-      <div class="knob-group"><label>Vol</label><div class="knob-wrap" data-deck="a" data-param="vol"><div class="knob" id="knob-a-vol"></div></div></div>
       <div class="knob-group"><label>Hi</label><div class="knob-wrap" data-deck="a" data-param="hi"><div class="knob" id="knob-a-hi"></div></div></div>
       <div class="knob-group"><label>Mid</label><div class="knob-wrap" data-deck="a" data-param="mid"><div class="knob" id="knob-a-mid"></div></div></div>
       <div class="knob-group"><label>Lo</label><div class="knob-wrap" data-deck="a" data-param="lo"><div class="knob" id="knob-a-lo"></div></div></div>
     </div>
+    <div class="ch-section"><label>Vol</label><input type="range" class="ch-fader" id="fader-a" min="0" max="1" step="0.01" value="1"></div>
     <div class="sub" id="info-a">Load a track to begin</div>
   </div>
   <div class="crossfader-section">
@@ -44,11 +44,11 @@
       <button class="ctrl-btn-sm" id="loop-b" title="Loop">⟳</button>
     </div>
     <div class="knob-row">
-      <div class="knob-group"><label>Vol</label><div class="knob-wrap" data-deck="b" data-param="vol"><div class="knob" id="knob-b-vol"></div></div></div>
       <div class="knob-group"><label>Hi</label><div class="knob-wrap" data-deck="b" data-param="hi"><div class="knob" id="knob-b-hi"></div></div></div>
       <div class="knob-group"><label>Mid</label><div class="knob-wrap" data-deck="b" data-param="mid"><div class="knob" id="knob-b-mid"></div></div></div>
       <div class="knob-group"><label>Lo</label><div class="knob-wrap" data-deck="b" data-param="lo"><div class="knob" id="knob-b-lo"></div></div></div>
     </div>
+    <div class="ch-section"><label>Vol</label><input type="range" class="ch-fader" id="fader-b" min="0" max="1" step="0.01" value="1"></div>
     <div class="sub" id="info-b">Load a track to begin</div>
   </div>
 </div>
@@ -232,6 +232,12 @@ document.querySelectorAll('.knob-wrap').forEach(wrap=>{
   });
 });
 updateKnobs();
+
+/* ---- channel faders ---- */
+document.querySelectorAll('.ch-fader').forEach(f=>{
+  const deck=f.id.replace('fader-','');
+  f.oninput=()=>{deckParams[deck].vol=parseFloat(f.value);updateMix();};
+});
 
 /* ---- crossfader ---- */
 const faderTrack=document.getElementById('fader-track');

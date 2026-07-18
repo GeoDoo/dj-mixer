@@ -121,3 +121,9 @@ canvas{display:block;width:100%;height:72px;border-radius:6px;background:oklch(0
 }
 .file-label:hover{border-color:var(--accent);color:var(--ink)}
 input[type=file]{display:none}
+.ch-section{display:flex;align-items:center;gap:6px}
+.ch-section label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);min-width:20px}
+.ch-fader{-webkit-appearance:none;appearance:none;flex:1;height:4px;background:var(--border);border-radius:2px;outline:none;cursor:pointer}
+.ch-fader::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:2px;background:oklch(0.50 0.02 270);border:1px solid var(--muted);cursor:pointer}
+.ch-fader::-webkit-slider-thumb:hover{background:oklch(0.60 0.02 270);border-color:var(--accent)}
+.ch-fader::-moz-range-thumb{width:14px;height:14px;border-radius:2px;background:oklch(0.50 0.02 270);border:1px solid var(--muted);cursor:pointer}
