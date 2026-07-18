@@ -18,10 +18,10 @@
       <button class="ctrl-btn-sm" id="cue-a" title="Set Cue Point">Cue</button>
       <button class="ctrl-btn-sm" id="loop-a" title="Loop">⟳</button>
     </div>
-    <div class="knob-row">
-      <div class="knob-group"><label>Hi</label><div class="knob-wrap" data-deck="a" data-param="hi"><div class="knob" id="knob-a-hi"></div></div></div>
-      <div class="knob-group"><label>Mid</label><div class="knob-wrap" data-deck="a" data-param="mid"><div class="knob" id="knob-a-mid"></div></div></div>
-      <div class="knob-group"><label>Lo</label><div class="knob-wrap" data-deck="a" data-param="lo"><div class="knob" id="knob-a-lo"></div></div></div>
+    <div class="eq-row">
+      <div class="eq-group"><label>Hi</label><input type="range" class="eq-fader" id="eq-a-hi" min="0" max="1" step="0.01" value="0.5"></div>
+      <div class="eq-group"><label>Mid</label><input type="range" class="eq-fader" id="eq-a-mid" min="0" max="1" step="0.01" value="0.5"></div>
+      <div class="eq-group"><label>Lo</label><input type="range" class="eq-fader" id="eq-a-lo" min="0" max="1" step="0.01" value="0.5"></div>
     </div>
     <div class="ch-section"><label>Vol</label><input type="range" class="ch-fader" id="fader-a" min="0" max="1" step="0.01" value="1"></div>
     <div class="sub" id="info-a">Load a track to begin</div>
@@ -43,10 +43,10 @@
       <button class="ctrl-btn-sm" id="cue-b" title="Set Cue Point">Cue</button>
       <button class="ctrl-btn-sm" id="loop-b" title="Loop">⟳</button>
     </div>
-    <div class="knob-row">
-      <div class="knob-group"><label>Hi</label><div class="knob-wrap" data-deck="b" data-param="hi"><div class="knob" id="knob-b-hi"></div></div></div>
-      <div class="knob-group"><label>Mid</label><div class="knob-wrap" data-deck="b" data-param="mid"><div class="knob" id="knob-b-mid"></div></div></div>
-      <div class="knob-group"><label>Lo</label><div class="knob-wrap" data-deck="b" data-param="lo"><div class="knob" id="knob-b-lo"></div></div></div>
+    <div class="eq-row">
+      <div class="eq-group"><label>Hi</label><input type="range" class="eq-fader" id="eq-b-hi" min="0" max="1" step="0.01" value="0.5"></div>
+      <div class="eq-group"><label>Mid</label><input type="range" class="eq-fader" id="eq-b-mid" min="0" max="1" step="0.01" value="0.5"></div>
+      <div class="eq-group"><label>Lo</label><input type="range" class="eq-fader" id="eq-b-lo" min="0" max="1" step="0.01" value="0.5"></div>
     </div>
     <div class="ch-section"><label>Vol</label><input type="range" class="ch-fader" id="fader-b" min="0" max="1" step="0.01" value="1"></div>
     <div class="sub" id="info-b">Load a track to begin</div>
@@ -55,19 +55,7 @@
 <script>
 const ctx = new (window.AudioContext || window.webkitAudioContext)();
 
-/* knob: convert value (0-1) to rotation (-135 to 135 deg) */
-function knobRot(v){return -135+v*270}
-function updateKnobs(){
-  document.querySelectorAll('.knob-wrap').forEach(w=>{
-    const deck=w.dataset.deck, param=w.dataset.param;
-    const val=deckParams[deck][param];
-    const knob=w.querySelector('.knob');
-    knob.style.transform=`rotate(${knobRot(val)}deg)`;
-    if(val>0)knob.classList.add('active');else knob.classList.remove('active');
-  });
-}
-
-const deckParams={a:{vol:1,hi:0,mid:0,lo:0},b:{vol:1,hi:0,mid:0,lo:0}};
+const deckParams={a:{vol:1,hi:0.5,mid:0.5,lo:0.5},b:{vol:1,hi:0.5,mid:0.5,lo:0.5}};
 let xfPos=0.5;
 
 function makeDeck(id,canvasId){
@@ -197,46 +185,14 @@ function makeDeck(id,canvasId){
 const a=makeDeck('a','wave-a');
 const b=makeDeck('b','wave-b');
 
-/* ---- knobs ---- */
-document.querySelectorAll('.knob-wrap').forEach(wrap=>{
-  const deck=wrap.dataset.deck, param=wrap.dataset.param;
-  const knob=wrap.querySelector('.knob');
-  let dragging=false,startY=0,startVal=0;
-
-  function applyVal(v){
-    deckParams[deck][param]=Math.max(0,Math.min(1,v));
-    updateKnobs();
-    updateMix();
-  }
-
-  function onPointerDown(e){
-    dragging=true;startY=e.clientY;startVal=deckParams[deck][param];
-    e.preventDefault();knob.setPointerCapture(e.pointerId);
-  }
-  function onPointerMove(e){
-    if(!dragging)return;
-    const dy=startY-e.clientY;
-    applyVal(startVal+dy/120);
-  }
-  function onPointerUp(){
-    if(!dragging)return;
-    dragging=false;
-  }
-  knob.addEventListener('pointerdown',onPointerDown);
-  knob.addEventListener('pointermove',onPointerMove);
-  knob.addEventListener('pointerup',onPointerUp);
-  knob.addEventListener('pointercancel',onPointerUp);
-
-  knob.addEventListener('dblclick',()=>{
-    applyVal(deckParams[deck][param]>0?0:1);
-  });
-});
-updateKnobs();
-
-/* ---- channel faders ---- */
+/* ---- faders ---- */
 document.querySelectorAll('.ch-fader').forEach(f=>{
   const deck=f.id.replace('fader-','');
   f.oninput=()=>{deckParams[deck].vol=parseFloat(f.value);updateMix();};
+});
+document.querySelectorAll('.eq-fader').forEach(f=>{
+  const deck=f.id.replace('eq-','')[0], param=f.id.replace('eq-','').slice(2);
+  f.oninput=()=>{deckParams[deck][param]=parseFloat(f.value);updateMix();};
 });
 
 /* ---- crossfader ---- */
@@ -296,23 +252,22 @@ document.addEventListener('keydown',e=>{
     case ' ':e.preventDefault();(focus==='a'?a:b).togglePlay();break;
     case 'ArrowLeft':setFader(Math.max(0,xfPos-0.04));break;
     case 'ArrowRight':setFader(Math.min(1,xfPos+0.04));break;
-    case 'q':{deckParams.a.vol=Math.max(0,deckParams.a.vol-0.05);updateKnobs();updateMix();break;}
-    case 'w':{deckParams.a.vol=Math.min(1,deckParams.a.vol+0.05);updateKnobs();updateMix();break;}
-    case 'i':{deckParams.b.vol=Math.max(0,deckParams.b.vol-0.05);updateKnobs();updateMix();break;}
-    case 'o':{deckParams.b.vol=Math.min(1,deckParams.b.vol+0.05);updateKnobs();updateMix();break;}
-    // EQ: a=hi s=mid d=lo ; j=hi k=mid l=lo
-    case 'a':{deckParams.a.hi=Math.max(0,deckParams.a.hi-0.05);updateKnobs();updateMix();break;}
-    case 's':{deckParams.a.mid=Math.max(0,deckParams.a.mid-0.05);updateKnobs();updateMix();break;}
-    case 'd':{deckParams.a.lo=Math.max(0,deckParams.a.lo-0.05);updateKnobs();updateMix();break;}
-    case 'z':{deckParams.a.hi=Math.min(1,deckParams.a.hi+0.05);updateKnobs();updateMix();break;}
-    case 'x':{deckParams.a.mid=Math.min(1,deckParams.a.mid+0.05);updateKnobs();updateMix();break;}
-    case 'c':{deckParams.a.lo=Math.min(1,deckParams.a.lo+0.05);updateKnobs();updateMix();break;}
-    case 'j':{deckParams.b.hi=Math.max(0,deckParams.b.hi-0.05);updateKnobs();updateMix();break;}
-    case 'k':{deckParams.b.mid=Math.max(0,deckParams.b.mid-0.05);updateKnobs();updateMix();break;}
-    case 'l':{deckParams.b.lo=Math.max(0,deckParams.b.lo-0.05);updateKnobs();updateMix();break;}
-    case 'u':{deckParams.b.hi=Math.min(1,deckParams.b.hi+0.05);updateKnobs();updateMix();break;}
-    case 'y':{deckParams.b.mid=Math.min(1,deckParams.b.mid+0.05);updateKnobs();updateMix();break;}
-    case 'h':{deckParams.b.lo=Math.min(1,deckParams.b.lo+0.05);updateKnobs();updateMix();break;}
+    case 'q':{deckParams.a.vol=Math.max(0,deckParams.a.vol-0.05);updateMix();break;}
+    case 'w':{deckParams.a.vol=Math.min(1,deckParams.a.vol+0.05);updateMix();break;}
+    case 'i':{deckParams.b.vol=Math.max(0,deckParams.b.vol-0.05);updateMix();break;}
+    case 'o':{deckParams.b.vol=Math.min(1,deckParams.b.vol+0.05);updateMix();break;}
+    case 'a':{deckParams.a.hi=Math.max(0,deckParams.a.hi-0.05);updateMix();break;}
+    case 's':{deckParams.a.mid=Math.max(0,deckParams.a.mid-0.05);updateMix();break;}
+    case 'd':{deckParams.a.lo=Math.max(0,deckParams.a.lo-0.05);updateMix();break;}
+    case 'z':{deckParams.a.hi=Math.min(1,deckParams.a.hi+0.05);updateMix();break;}
+    case 'x':{deckParams.a.mid=Math.min(1,deckParams.a.mid+0.05);updateMix();break;}
+    case 'c':{deckParams.a.lo=Math.min(1,deckParams.a.lo+0.05);updateMix();break;}
+    case 'j':{deckParams.b.hi=Math.max(0,deckParams.b.hi-0.05);updateMix();break;}
+    case 'k':{deckParams.b.mid=Math.max(0,deckParams.b.mid-0.05);updateMix();break;}
+    case 'l':{deckParams.b.lo=Math.max(0,deckParams.b.lo-0.05);updateMix();break;}
+    case 'u':{deckParams.b.hi=Math.min(1,deckParams.b.hi+0.05);updateMix();break;}
+    case 'y':{deckParams.b.mid=Math.min(1,deckParams.b.mid+0.05);updateMix();break;}
+    case 'h':{deckParams.b.lo=Math.min(1,deckParams.b.lo+0.05);updateMix();break;}
   }
 });
 document.getElementById('deck-a').style.outline='2px solid var(--focus)';

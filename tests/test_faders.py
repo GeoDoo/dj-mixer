@@ -1,11 +1,10 @@
-"""Channel faders are linear sliders, not rotary knobs."""
-def test_channel_fader_is_linear():
+"""All controls are linear sliders — no rotary knobs."""
+def test_eq_is_fader_not_knob():
     html = open('index.html').read()
-    # No Vol knob — replaced by a linear fader element
-    assert 'knob-a-vol' not in html, 'Vol is still a knob'
-    assert 'input' in html or 'fader' in html or 'range' in html, 'no linear fader'
-    assert 'vol' in html or 'channel' in html, 'no volume/channel fader ref'
+    assert 'eq-fader' in html, 'no EQ fader elements'
+    assert 'class=\"knob\"' not in html, 'rotary knob CSS still present'
 
-def test_vol_still_controls_gain():
+def test_vol_is_fader_not_knob():
     html = open('index.html').read()
-    assert 'deckParams' in html, 'deckParams structure missing'
+    assert 'ch-fader' in html, 'no channel fader elements'
+    assert 'knob-a-vol' not in html, 'vol is still a knob'
