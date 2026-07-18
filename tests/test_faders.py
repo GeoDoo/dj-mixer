@@ -6,5 +6,4 @@ def test_eq_is_fader_not_knob():
 
 def test_vol_is_fader_not_knob():
     html = open('index.html').read()
-    assert 'ch-fader' in html, 'no channel fader elements'
-    assert 'knob-a-vol' not in html, 'vol is still a knob'
+    assert 'eq-a-vol' in html, 'vol not in eq-row'

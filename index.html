@@ -19,11 +19,11 @@
       <button class="ctrl-btn-sm" id="loop-a" title="Loop">⟳</button>
     </div>
     <div class="eq-row">
+      <div class="eq-group"><label>Vol</label><input type="range" class="eq-fader" id="eq-a-vol" min="0" max="1" step="0.01" value="1"></div>
       <div class="eq-group"><label>Hi</label><input type="range" class="eq-fader" id="eq-a-hi" min="0" max="1" step="0.01" value="0.5"></div>
       <div class="eq-group"><label>Mid</label><input type="range" class="eq-fader" id="eq-a-mid" min="0" max="1" step="0.01" value="0.5"></div>
       <div class="eq-group"><label>Lo</label><input type="range" class="eq-fader" id="eq-a-lo" min="0" max="1" step="0.01" value="0.5"></div>
     </div>
-    <div class="ch-section"><label>Vol</label><input type="range" class="ch-fader" id="fader-a" min="0" max="1" step="0.01" value="1"></div>
     <div class="sub" id="info-a">Load a track to begin</div>
   </div>
   <div class="crossfader-section">
@@ -44,11 +44,11 @@
       <button class="ctrl-btn-sm" id="loop-b" title="Loop">⟳</button>
     </div>
     <div class="eq-row">
+      <div class="eq-group"><label>Vol</label><input type="range" class="eq-fader" id="eq-b-vol" min="0" max="1" step="0.01" value="1"></div>
       <div class="eq-group"><label>Hi</label><input type="range" class="eq-fader" id="eq-b-hi" min="0" max="1" step="0.01" value="0.5"></div>
       <div class="eq-group"><label>Mid</label><input type="range" class="eq-fader" id="eq-b-mid" min="0" max="1" step="0.01" value="0.5"></div>
       <div class="eq-group"><label>Lo</label><input type="range" class="eq-fader" id="eq-b-lo" min="0" max="1" step="0.01" value="0.5"></div>
     </div>
-    <div class="ch-section"><label>Vol</label><input type="range" class="ch-fader" id="fader-b" min="0" max="1" step="0.01" value="1"></div>
     <div class="sub" id="info-b">Load a track to begin</div>
   </div>
 </div>
@@ -186,10 +186,6 @@ const a=makeDeck('a','wave-a');
 const b=makeDeck('b','wave-b');
 
 /* ---- faders ---- */
-document.querySelectorAll('.ch-fader').forEach(f=>{
-  const deck=f.id.replace('fader-','');
-  f.oninput=()=>{deckParams[deck].vol=parseFloat(f.value);updateMix();};
-});
 document.querySelectorAll('.eq-fader').forEach(f=>{
   const deck=f.id.replace('eq-','')[0], param=f.id.replace('eq-','').slice(2);
   f.oninput=()=>{deckParams[deck][param]=parseFloat(f.value);updateMix();};
