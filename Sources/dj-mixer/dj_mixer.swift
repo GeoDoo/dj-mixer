@@ -568,27 +568,89 @@ struct WaveformMini: View {
 struct LibraryView: View {
     @Bindable var engine: AudioEngine
     @Environment(\.dismiss) var dismiss
+    @State private var selectedPlaylist: String = "__all__"
+    @State private var newPlaylistName = ""
+    
+    var displayedTracks: [TrackRecord] {
+        if selectedPlaylist == "__all__" {
+            return engine.library.tracks
+        }
+        guard let pl = engine.library.playlists.first(where: { $0.id.uuidString == selectedPlaylist }) else {
+            return []
+        }
+        return pl.trackIds.compactMap { id in engine.library.tracks.first(where: { $0.id == id }) }
+    }
     
     var body: some View {
         VStack(spacing: 8) {
             HStack {
                 Text("LIBRARY").font(.headline).foregroundStyle(Color(white: 0.8))
-                Text("(\(engine.library.tracks.count) tracks)").font(.caption).foregroundStyle(.secondary)
+                Text("(\(engine.library.tracks.count) tracks\(engine.library.playlists.count > 0 ? ", \(engine.library.playlists.count) playlists" : ""))")
+                    .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Close") { dismiss() }.buttonStyle(.bordered).controlSize(.small)
-            }.padding()
+            }.padding([.top, .horizontal])
             
-            if engine.library.tracks.isEmpty {
-                Text("No tracks. Load a track into any channel — it saves automatically.")
+            // Playlist bar
+            HStack(spacing: 6) {
+                Picker("", selection: $selectedPlaylist) {
+                    Text("🎵 All Tracks").tag("__all__")
+                    ForEach(engine.library.playlists) { pl in
+                        Text("📁 \(pl.name) (\(pl.trackIds.count))").tag(pl.id.uuidString)
+                    }
+                }
+                .pickerStyle(.menu).frame(width: 200)
+                
+                TextField("New playlist name", text: $newPlaylistName)
+                    .textFieldStyle(.plain).font(.system(size: 11))
+                    .padding(4).background(Color(white: 0.15)).cornerRadius(4)
+                    .frame(width: 140)
+                
+                Button("+") {
+                    let n = newPlaylistName.trimmingCharacters(in: .whitespaces)
+                    if !n.isEmpty {
+                        var lib = engine.library
+                        lib.playlists.append(PlaylistRecord(id: UUID(), name: n, trackIds: [], created: Date()))
+                        engine.library = lib
+                        LibraryManager.default.save(lib)
+                        newPlaylistName = ""
+                    }
+                }
+                .buttonStyle(.bordered).tint(.green).controlSize(.small).font(.system(size: 9))
+                
+                if selectedPlaylist != "__all__" {
+                    Button("✕") {
+                        var lib = engine.library
+                        lib.playlists.removeAll(where: { $0.id.uuidString == selectedPlaylist })
+                        engine.library = lib
+                        LibraryManager.default.save(lib)
+                        selectedPlaylist = "__all__"
+                    }
+                    .buttonStyle(.borderless).foregroundStyle(.red).font(.system(size: 10))
+                }
+                
+                Spacer()
+            }.padding(.horizontal)
+            
+            Divider().background(Color(white: 0.15)).padding(.horizontal, 8)
+            
+            // Track list
+            if displayedTracks.isEmpty {
+                Text(selectedPlaylist == "__all__" 
+                    ? "No tracks. Load a track into any channel — it saves automatically."
+                    : "Playlist is empty. Add tracks from All Tracks view.")
                     .font(.body).foregroundStyle(.secondary).padding()
                 Spacer()
             } else {
-                List(engine.library.tracks) { track in
+                List(displayedTracks) { track in
                     HStack {
                         Text(track.name).font(.body).lineLimit(1)
+                            .frame(minWidth: 200, alignment: .leading)
                         Spacer()
-                        Text(formatTime(track.duration)).font(.caption).foregroundStyle(.secondary).frame(width: 40)
-                        // Load into channel buttons
+                        Text(formatTime(track.duration)).font(.caption)
+                            .foregroundStyle(.secondary).frame(width: 50, alignment: .trailing)
+                        
+                        // Load into channel
                         HStack(spacing: 2) {
                             ForEach(0..<4) { i in
                                 Button("CH\(i+1)") {
@@ -597,20 +659,44 @@ struct LibraryView: View {
                                 }
                                 .buttonStyle(.bordered).tint(.gray).font(.system(size: 8)).controlSize(.mini)
                             }
+                        }.frame(width: 120)
+                        
+                        // Add to playlist (only in All Tracks view)
+                        if selectedPlaylist == "__all__" && !engine.library.playlists.isEmpty {
+                            Menu("+") {
+                                ForEach(engine.library.playlists) { pl in
+                                    Button(pl.name) {
+                                        var lib = engine.library
+                                        if !lib.playlists.first(where: { $0.id == pl.id })!.trackIds.contains(track.id) {
+                                            lib.playlists[lib.playlists.firstIndex(where: { $0.id == pl.id })!].trackIds.append(track.id)
+                                        }
+                                        engine.library = lib
+                                        LibraryManager.default.save(lib)
+                                    }
+                                }
+                            }
+                            .menuStyle(.borderlessButton).frame(width: 20)
+                            .font(.system(size: 10))
                         }
+                        
                         Button("✕") {
                             var lib = engine.library
-                            lib.tracks.removeAll(where: { $0.id == track.id })
+                            if selectedPlaylist == "__all__" {
+                                lib.tracks.removeAll(where: { $0.id == track.id })
+                            } else {
+                                if let idx = lib.playlists.firstIndex(where: { $0.id.uuidString == selectedPlaylist }) {
+                                    lib.playlists[idx].trackIds.removeAll(where: { $0 == track.id })
+                                }
+                            }
                             engine.library = lib
                             LibraryManager.default.save(lib)
                         }
                         .buttonStyle(.borderless).font(.system(size: 10)).foregroundStyle(.red)
                     }
                 }
-                .frame(minWidth: 500, minHeight: 250)
             }
         }
-        .frame(width: 600, height: 350)
+        .frame(width: 1200, height: 500)
         .background(Color(white: 0.12))
         .preferredColorScheme(.dark)
     }
