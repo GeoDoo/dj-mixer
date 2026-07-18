@@ -178,8 +178,7 @@ struct ContentView: View {
             CrossfaderView(crossfader: $engine.crossfader, onDrag: { engine.updateMix() })
             DeckView(deck: engine.decks[1], color: .orange)
         }
-        .padding()
-        .background(Color(.windowBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -223,7 +222,7 @@ struct DeckView: View {
             }
         }
         .padding(12)
-        .frame(width: 280)
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.controlBackgroundColor).opacity(0.5))
         .cornerRadius(10)
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.audio]) { result in
