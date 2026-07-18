@@ -112,6 +112,10 @@ import AVFoundation
         }
         masterBPM = effBPM
         fx.apply(type: fxType, param: fxParam, beat: fxBeat, bpm: effBPM)
+        // Reset timePitch to 1.0 when override is off
+        for ch in channels {
+            if ch.bpmOverride < 0 { ch.timePitch.rate = 1.0 }
+        }
     }
     
     func startMeterTimer() {
