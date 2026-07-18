@@ -110,3 +110,77 @@ def test_cue_jumps_back():
     os.unlink(wav.name)
     srv.terminate()
     assert not errors, f'Errors: {errors}'
+
+def test_loop_toggle():
+    """Upload WAV, click ⟳, verify active class toggles on click."""
+    import wave, struct, tempfile
+    wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+    with wave.open(wav.name, 'w') as f:
+        f.setnchannels(1); f.setsampwidth(2); f.setframerate(44100)
+        for i in range(44100): f.writeframes(struct.pack('<h', int(16000*(i%44100)/44100)))
+    wav.close()
+    srv = _serve()
+    errors = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto('http://localhost:8765/index.html')
+        page.wait_for_load_state('networkidle')
+        time.sleep(0.3)
+        assert not errors, f'Errors on load: {errors}'
+        page.locator('#file-a').set_input_files(wav.name)
+        time.sleep(0.5)
+        # click ⟳ — should get active class
+        page.click('#loop-a')
+        time.sleep(0.1)
+        cls = page.evaluate('() => document.getElementById("loop-a").className')
+        assert 'active' in cls, f'loop should have active class, got: {cls}'
+        # click again — active should be removed
+        page.click('#loop-a')
+        time.sleep(0.1)
+        cls2 = page.evaluate('() => document.getElementById("loop-a").className')
+        assert 'active' not in cls2, f'loop should not have active class after second click, got: {cls2}'
+        browser.close()
+    os.unlink(wav.name)
+    srv.terminate()
+    assert not errors, f'Errors: {errors}'
+
+def test_canvas_seek_changes_position():
+    """Click on waveform at 80% — verify pausePos moved past halfway."""
+    import wave, struct, tempfile
+    wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+    with wave.open(wav.name, 'w') as f:
+        f.setnchannels(1); f.setsampwidth(2); f.setframerate(44100)
+        for i in range(44100*3): f.writeframes(struct.pack('<h', int(16000*(i%44100)/44100)))
+    wav.close()
+    srv = _serve()
+    errors = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.on('pageerror', lambda e: errors.append(str(e)))
+        page.goto('http://localhost:8765/index.html')
+        page.wait_for_load_state('networkidle')
+        time.sleep(0.3)
+        assert not errors
+        page.locator('#file-a').set_input_files(wav.name)
+        time.sleep(0.5)
+        # play briefly then stop
+        page.click('#play-a')
+        time.sleep(0.3)
+        page.click('#play-a')
+        time.sleep(0.1)
+        pos_before = page.evaluate('() => a.pausePos()')
+        # click canvas at 80%
+        canvas = page.locator('#wave-a')
+        box = canvas.bounding_box()
+        page.mouse.click(box['x'] + box['width'] * 0.8, box['y'] + box['height']/2)
+        time.sleep(0.1)
+        pos_after = page.evaluate('() => a.pausePos()')
+        print(f'seek: {pos_before} -> {pos_after}')
+        assert pos_after > pos_before + 0.3, f'seek position should advance, was {pos_before} -> {pos_after}'
+        browser.close()
+    os.unlink(wav.name)
+    srv.terminate()
+    assert not errors, f'Errors: {errors}'
