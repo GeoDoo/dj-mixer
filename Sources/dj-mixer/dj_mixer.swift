@@ -157,14 +157,12 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
 @Observable class Channel: Identifiable {
     let id: Int
     var player = AVAudioPlayerNode()
-    var timePitch = AVAudioUnitTimePitch()
     var eq: AVAudioUnitEQ
     var trimMixer = AVAudioMixerNode()
     var channelMixer = AVAudioMixerNode()
     var cueMixer = AVAudioMixerNode()
     
     var trim: Float = 0.85 { didSet { onUpdate?() } }
-    var rate: Float = 1.0 { didSet { timePitch.rate = rate; onUpdate?() } }
     var hiKnob: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
     var midKnob: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
     var lowKnob: Float = 0.5 { didSet { updateEQ(); onUpdate?() } }
@@ -199,7 +197,6 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     init(id: Int) {
         self.id = id
         eq = AVAudioUnitEQ(numberOfBands: 3)
-        timePitch.overlap = 8  // quality
         let cfgs: [(AVAudioUnitEQFilterType, Float, Float)] = [(.highShelf, 7000, 0.5), (.parametric, 1200, 0.7), (.lowShelf, 200, 0.5)]
         for (i, (t, f, b)) in cfgs.enumerated() {
             eq.bands[i].filterType = t; eq.bands[i].frequency = f
@@ -209,9 +206,8 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     }
     
     func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
-        engine.attach(player); engine.attach(timePitch); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
-        engine.connect(player, to: timePitch, format: nil)
-        engine.connect(timePitch, to: eq, format: nil)
+        engine.attach(player); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
+        engine.connect(player, to: eq, format: nil)
         engine.connect(eq, to: trimMixer, format: nil)
         engine.connect(trimMixer, to: channelMixer, format: nil)
         engine.connect(channelMixer, to: master, format: nil)
@@ -456,11 +452,6 @@ struct ChannelStripView: View {
                 Button("CUE") { channel.toggleCue() }
                     .buttonStyle(.bordered).tint(channel.cueSet ? .green : .gray).font(.system(size: 10)).controlSize(.small)
                 Spacer()
-                // Tempo slider
-                VStack(spacing: 0) {
-                    Text(String(format: "%.1f", channel.rate * 100)).font(.system(size: 7)).foregroundStyle(Color(white: 0.5))
-                    Slider(value: $channel.rate, in: 0.5...1.5).frame(width: 50)
-                }
                 if !channel.fileName.isEmpty {
                     Button("✕") {
                         channel.currentFile = nil
