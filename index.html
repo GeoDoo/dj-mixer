@@ -19,12 +19,10 @@
       <button class="ctrl-btn-sm" id="loop-a" title="Loop">⟳</button>
     </div>
     <div class="knob-row">
-      <div class="knob-group">
-        <label>A Vol</label>
-        <div class="knob-wrap" data-deck="a" data-param="vol">
-          <div class="knob" id="knob-a"></div>
-        </div>
-      </div>
+      <div class="knob-group"><label>Vol</label><div class="knob-wrap" data-deck="a" data-param="vol"><div class="knob" id="knob-a-vol"></div></div></div>
+      <div class="knob-group"><label>Hi</label><div class="knob-wrap" data-deck="a" data-param="hi"><div class="knob" id="knob-a-hi"></div></div></div>
+      <div class="knob-group"><label>Mid</label><div class="knob-wrap" data-deck="a" data-param="mid"><div class="knob" id="knob-a-mid"></div></div></div>
+      <div class="knob-group"><label>Lo</label><div class="knob-wrap" data-deck="a" data-param="lo"><div class="knob" id="knob-a-lo"></div></div></div>
     </div>
     <div class="sub" id="info-a">Load a track to begin</div>
   </div>
@@ -46,12 +44,10 @@
       <button class="ctrl-btn-sm" id="loop-b" title="Loop">⟳</button>
     </div>
     <div class="knob-row">
-      <div class="knob-group">
-        <label>B Vol</label>
-        <div class="knob-wrap" data-deck="b" data-param="vol">
-          <div class="knob" id="knob-b"></div>
-        </div>
-      </div>
+      <div class="knob-group"><label>Vol</label><div class="knob-wrap" data-deck="b" data-param="vol"><div class="knob" id="knob-b-vol"></div></div></div>
+      <div class="knob-group"><label>Hi</label><div class="knob-wrap" data-deck="b" data-param="hi"><div class="knob" id="knob-b-hi"></div></div></div>
+      <div class="knob-group"><label>Mid</label><div class="knob-wrap" data-deck="b" data-param="mid"><div class="knob" id="knob-b-mid"></div></div></div>
+      <div class="knob-group"><label>Lo</label><div class="knob-wrap" data-deck="b" data-param="lo"><div class="knob" id="knob-b-lo"></div></div></div>
     </div>
     <div class="sub" id="info-b">Load a track to begin</div>
   </div>
@@ -61,23 +57,26 @@ const ctx = new (window.AudioContext || window.webkitAudioContext)();
 
 /* knob: convert value (0-1) to rotation (-135 to 135 deg) */
 function knobRot(v){return -135+v*270}
-/* render all knobs from stored values */
 function updateKnobs(){
-  document.querySelectorAll('.knob').forEach(k=>{
-    const deck=k.id.replace('knob-','');
-    const val=vols[deck];
-    k.style.transform=`rotate(${knobRot(val)}deg)`;
-    if(val>0)k.classList.add('active');else k.classList.remove('active');
+  document.querySelectorAll('.knob-wrap').forEach(w=>{
+    const deck=w.dataset.deck, param=w.dataset.param;
+    const val=deckParams[deck][param];
+    const knob=w.querySelector('.knob');
+    knob.style.transform=`rotate(${knobRot(val)}deg)`;
+    if(val>0)knob.classList.add('active');else knob.classList.remove('active');
   });
 }
 
-const vols={a:1,b:1};
+const deckParams={a:{vol:1,hi:0,mid:0,lo:0},b:{vol:1,hi:0,mid:0,lo:0}};
 let xfPos=0.5;
 
 function makeDeck(id,canvasId){
   let src=null,buf=null,gain=ctx.createGain(),playing=false,startTime=0,pausePos=0,loop=false;
   let cuePoint=0,cueSet=false;
-  gain.connect(ctx.destination);
+  const eqLo=ctx.createBiquadFilter();eqLo.type='lowshelf';eqLo.frequency.value=200;
+  const eqMid=ctx.createBiquadFilter();eqMid.type='peaking';eqMid.frequency.value=1200;eqMid.Q.value=0.7;
+  const eqHi=ctx.createBiquadFilter();eqHi.type='highshelf';eqHi.frequency.value=7000;
+  eqLo.connect(eqMid);eqMid.connect(eqHi);eqHi.connect(gain);gain.connect(ctx.destination);
   const playBtn=document.getElementById('play-'+id);
   const cueBtn=document.getElementById('cue-'+id);
   const loopBtn=document.getElementById('loop-'+id);
@@ -124,7 +123,7 @@ function makeDeck(id,canvasId){
     if(!buf)return;
     if(src)try{src.stop()}catch(e){}
     src=ctx.createBufferSource();
-    src.buffer=buf;src.loop=loop;src.connect(gain);
+    src.buffer=buf;src.loop=loop;src.connect(eqLo);
     src.start(0,pos);startTime=ctx.currentTime;pausePos=pos;playing=true;
     playBtn.textContent='❚❚';playBtn.classList.add('on');ctx.resume();
     if(!raf)raf=requestAnimationFrame(tick);
@@ -192,32 +191,32 @@ function makeDeck(id,canvasId){
     else raf=null;
   }
 
-  return {gain,deck:id,buf:()=>buf,pausePos:()=>pausePos,togglePlay,stopPlay,startPlay,cuePoint:()=>cuePoint};
+  return {gain,eqLo,eqMid,eqHi,deck:id,buf:()=>buf,pausePos:()=>pausePos,togglePlay,stopPlay,startPlay,cuePoint:()=>cuePoint};
 }
 
 const a=makeDeck('a','wave-a');
 const b=makeDeck('b','wave-b');
 
-/* ---- volume knobs ---- */
+/* ---- knobs ---- */
 document.querySelectorAll('.knob-wrap').forEach(wrap=>{
-  const deck=wrap.dataset.deck;
+  const deck=wrap.dataset.deck, param=wrap.dataset.param;
   const knob=wrap.querySelector('.knob');
   let dragging=false,startY=0,startVal=0;
 
-  function applyVol(v){
-    vols[deck]=Math.max(0,Math.min(1,v));
+  function applyVal(v){
+    deckParams[deck][param]=Math.max(0,Math.min(1,v));
     updateKnobs();
     updateMix();
   }
 
   function onPointerDown(e){
-    dragging=true;startY=e.clientY;startVal=vols[deck];
+    dragging=true;startY=e.clientY;startVal=deckParams[deck][param];
     e.preventDefault();knob.setPointerCapture(e.pointerId);
   }
   function onPointerMove(e){
     if(!dragging)return;
     const dy=startY-e.clientY;
-    applyVol(startVal+dy/120);
+    applyVal(startVal+dy/120);
   }
   function onPointerUp(){
     if(!dragging)return;
@@ -228,9 +227,8 @@ document.querySelectorAll('.knob-wrap').forEach(wrap=>{
   knob.addEventListener('pointerup',onPointerUp);
   knob.addEventListener('pointercancel',onPointerUp);
 
-  // click to toggle mute
   knob.addEventListener('dblclick',()=>{
-    applyVol(vols[deck]>0?0:1);
+    applyVal(deckParams[deck][param]>0?0:1);
   });
 });
 updateKnobs();
@@ -248,10 +246,17 @@ function setFader(v){
   updateMix();
 }
 
+function setEQ(deck){
+  const p=deckParams[deck];
+  deck.eqLo.gain.value=p.lo*12-6;   // -6 to +6 dB
+  deck.eqMid.gain.value=p.mid*12-6;
+  deck.eqHi.gain.value=p.hi*12-6;
+}
 function updateMix(){
+  setEQ(a);setEQ(b);
   const v=xfPos;
-  a.gain.gain.value=vols.a*(1-v)*2;
-  b.gain.gain.value=vols.b*v*2;
+  a.gain.gain.value=deckParams.a.vol*(1-v)*2;
+  b.gain.gain.value=deckParams.b.vol*v*2;
   const labels=document.querySelectorAll('.crossfader-section label');
   if(labels[0])labels[0].style.color=xfPos<0.5?'var(--accent)':'var(--muted)';
   if(labels[1])labels[1].style.color=xfPos>0.5?'var(--accent)':'var(--muted)';
@@ -285,10 +290,23 @@ document.addEventListener('keydown',e=>{
     case ' ':e.preventDefault();(focus==='a'?a:b).togglePlay();break;
     case 'ArrowLeft':setFader(Math.max(0,xfPos-0.04));break;
     case 'ArrowRight':setFader(Math.min(1,xfPos+0.04));break;
-    case 'q':{const v=Math.max(0,vols.a-0.05);vols.a=v;updateKnobs();updateMix();break;}
-    case 'w':{const v=Math.min(1,vols.a+0.05);vols.a=v;updateKnobs();updateMix();break;}
-    case 'i':{const v=Math.max(0,vols.b-0.05);vols.b=v;updateKnobs();updateMix();break;}
-    case 'o':{const v=Math.min(1,vols.b+0.05);vols.b=v;updateKnobs();updateMix();break;}
+    case 'q':{deckParams.a.vol=Math.max(0,deckParams.a.vol-0.05);updateKnobs();updateMix();break;}
+    case 'w':{deckParams.a.vol=Math.min(1,deckParams.a.vol+0.05);updateKnobs();updateMix();break;}
+    case 'i':{deckParams.b.vol=Math.max(0,deckParams.b.vol-0.05);updateKnobs();updateMix();break;}
+    case 'o':{deckParams.b.vol=Math.min(1,deckParams.b.vol+0.05);updateKnobs();updateMix();break;}
+    // EQ: a=hi s=mid d=lo ; j=hi k=mid l=lo
+    case 'a':{deckParams.a.hi=Math.max(0,deckParams.a.hi-0.05);updateKnobs();updateMix();break;}
+    case 's':{deckParams.a.mid=Math.max(0,deckParams.a.mid-0.05);updateKnobs();updateMix();break;}
+    case 'd':{deckParams.a.lo=Math.max(0,deckParams.a.lo-0.05);updateKnobs();updateMix();break;}
+    case 'z':{deckParams.a.hi=Math.min(1,deckParams.a.hi+0.05);updateKnobs();updateMix();break;}
+    case 'x':{deckParams.a.mid=Math.min(1,deckParams.a.mid+0.05);updateKnobs();updateMix();break;}
+    case 'c':{deckParams.a.lo=Math.min(1,deckParams.a.lo+0.05);updateKnobs();updateMix();break;}
+    case 'j':{deckParams.b.hi=Math.max(0,deckParams.b.hi-0.05);updateKnobs();updateMix();break;}
+    case 'k':{deckParams.b.mid=Math.max(0,deckParams.b.mid-0.05);updateKnobs();updateMix();break;}
+    case 'l':{deckParams.b.lo=Math.max(0,deckParams.b.lo-0.05);updateKnobs();updateMix();break;}
+    case 'u':{deckParams.b.hi=Math.min(1,deckParams.b.hi+0.05);updateKnobs();updateMix();break;}
+    case 'y':{deckParams.b.mid=Math.min(1,deckParams.b.mid+0.05);updateKnobs();updateMix();break;}
+    case 'h':{deckParams.b.lo=Math.min(1,deckParams.b.lo+0.05);updateKnobs();updateMix();break;}
   }
 });
 document.getElementById('deck-a').style.outline='2px solid var(--focus)';
