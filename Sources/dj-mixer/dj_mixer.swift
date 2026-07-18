@@ -45,6 +45,7 @@ import AVFoundation
     // Peak meters
     var channelPeaks: [Float] = [0, 0, 0, 0]
     var masterPeak: Float = 0
+    var masterBPM: Double = 120
     
     // Library
     var library = LibraryManager.default.load()
@@ -81,8 +82,11 @@ import AVFoundation
     func updateMix() {
         for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
         masterMixer.volume = masterVolume
+        // Average BPM from loaded channels
+        let loaded = channels.filter { $0.currentFile != nil }
+        masterBPM = loaded.isEmpty ? 120 : Double(loaded.reduce(0) { $0 + $1.bpm }) / Double(loaded.count)
         fx.on = fxOn
-        fx.apply(type: fxType, param: fxParam, beat: fxBeat)
+        fx.apply(type: fxType, param: fxParam, beat: fxBeat, bpm: masterBPM)
     }
     
     func startMeterTimer() {
@@ -124,13 +128,15 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
         distortion.wetDryMix = 0; distortion.loadFactoryPreset(.drumsLoFi)
     }
     
-    func apply(type: FXType, param: Float, beat: FXBeat) {
-        let bpm: Double = [.whole: 4, .half: 2, .quarter: 1, .eighth: 0.5, .sixteenth: 0.25][beat] ?? 1
+    func apply(type: FXType, param: Float, beat: FXBeat, bpm: Double) {
+        let beatDiv: Double = [.whole: 4, .half: 2, .quarter: 1, .eighth: 0.5, .sixteenth: 0.25][beat] ?? 1
+        // Delay time in seconds from BPM
+        let delaySec = bpm > 0 ? 60.0 / bpm * beatDiv : 1.0
         let wet = on ? param : 0
         delay.wetDryMix = 0; reverb.wetDryMix = 0; distortion.wetDryMix = 0
         switch type {
         case .delay, .echo:
-            delay.delayTime = bpm
+            delay.delayTime = delaySec
             delay.feedback = Float(param) * 80
             delay.wetDryMix = Float(wet) * 50
         case .reverb: reverb.wetDryMix = Float(wet) * 60
@@ -173,6 +179,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     } }
     var pausedAt: TimeInterval = 0
     var duration: TimeInterval = 0
+    var bpm: Double = 120
     var currentTime: TimeInterval = 0
     var cuePoint: TimeInterval = 0
     var cueSet = false
@@ -238,7 +245,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             let file = try AVAudioFile(forReading: loadURL)
             currentFile = file; fileName = loadURL.lastPathComponent
             duration = TimeInterval(file.length) / file.fileFormat.sampleRate
-            computeWaveform(file: file); pausedAt = 0
+            computeWaveform(file: file); computeBPM(file: file); pausedAt = 0
         } catch { print("CH\(id) load: \(error)") }
     }
     
@@ -248,7 +255,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
             let file = try AVAudioFile(forReading: url)
             currentFile = file; fileName = track.name
             duration = track.duration
-            computeWaveform(file: file); pausedAt = 0
+            computeWaveform(file: file); computeBPM(file: file); pausedAt = 0
         } catch { print("CH\(id) lib: \(error)") }
     }
     
@@ -270,6 +277,47 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
                 waveform.append(peak)
             }
             pos += Int64(buf.frameLength)
+        }
+        file.framePosition = 0
+    }
+    
+    func computeBPM(file: AVAudioFile) {
+        let sr = file.fileFormat.sampleRate
+        let total = Int64(file.length)
+        let hop = Int64(sr / 100)  // 100 Hz envelope
+        let numFrames = Int(total / hop)
+        guard numFrames > 200 else { bpm = 120; return }  // need at least 2s
+        
+        // Compute energy envelope
+        let chunk = min(hop, total)
+        guard let buf = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(chunk)) else { return }
+        var envelope = [Float](repeating: 0, count: numFrames)
+        for i in 0..<numFrames {
+            file.framePosition = Int64(i) * hop
+            buf.frameLength = 0
+            try? file.read(into: buf)
+            guard buf.frameLength > 0, let d = buf.floatChannelData?[0] else { break }
+            var e: Float = 0
+            for j in 0..<Int(buf.frameLength) { e += abs(d[j]) }
+            envelope[i] = e / Float(buf.frameLength)
+        }
+        
+        // Autocorrelation on envelope to find beat period
+        let minLag = Int(Double(sr) / 180.0 / Double(hop))  // 180 BPM max
+        let maxLag = Int(Double(sr) / 60.0 / Double(hop))   // 60 BPM min
+        guard maxLag > minLag && maxLag < numFrames / 2 else { bpm = 120; return }
+        
+        var bestLag = minLag
+        var bestCorr: Float = 0
+        for lag in minLag...maxLag {
+            var corr: Float = 0
+            for i in 0..<(numFrames - lag) { corr += envelope[i] * envelope[i + lag] }
+            if corr > bestCorr { bestCorr = corr; bestLag = lag }
+        }
+        
+        if bestCorr > 0 {
+            let periodSec = Double(bestLag) / 100.0
+            bpm = periodSec > 0 ? 60.0 / periodSec : 120
         }
         file.framePosition = 0
     }
