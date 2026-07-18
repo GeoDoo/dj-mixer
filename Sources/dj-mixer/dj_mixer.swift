@@ -80,7 +80,6 @@ import AVFoundation
     }
     
     func updateMix() {
-        for ch in channels { ch.applyMix(crossfader: crossfader, curve: crossfaderCurve) }
         masterMixer.volume = masterVolume
         fx.on = fxOn
         // Effective BPM per channel: override or detected
@@ -96,6 +95,18 @@ import AVFoundation
         }
         masterBPM = effBPM
         fx.apply(type: fxType, param: fxParam, beat: fxBeat, bpm: effBPM)
+        // Sync playback speed per channel
+        for ch in channels {
+            ch.timePitch.pitch = 0
+            ch.timePitch.bypass = false
+            let d = ch.bpm
+            if d > 0 && ch.bpmOverride >= 0 {
+                ch.timePitch.rate = ch.bpmOverride / Float(d)
+            } else {
+                ch.timePitch.rate = 1.0
+            }
+            ch.applyMix(crossfader: crossfader, curve: crossfaderCurve)
+        }
     }
     
     func startMeterTimer() {
@@ -164,6 +175,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
 @Observable class Channel: Identifiable {
     let id: Int
     var player = AVAudioPlayerNode()
+    let timePitch = AVAudioUnitTimePitch()
     var eq: AVAudioUnitEQ
     var trimMixer = AVAudioMixerNode()
     var channelMixer = AVAudioMixerNode()
@@ -205,6 +217,7 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     init(id: Int) {
         self.id = id
         eq = AVAudioUnitEQ(numberOfBands: 3)
+        timePitch.overlap = 8; timePitch.pitch = 0; timePitch.rate = 1.0
         let cfgs: [(AVAudioUnitEQFilterType, Float, Float)] = [(.highShelf, 7000, 0.5), (.parametric, 1200, 0.7), (.lowShelf, 200, 0.5)]
         for (i, (t, f, b)) in cfgs.enumerated() {
             eq.bands[i].filterType = t; eq.bands[i].frequency = f
@@ -214,9 +227,10 @@ enum FXBeat: String, CaseIterable { case whole = "1/1", half = "1/2", quarter = 
     }
     
     func attach(to engine: AVAudioEngine, master: AVAudioMixerNode) {
-        engine.attach(player); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
-        engine.connect(player, to: eq, format: nil)
-        engine.connect(eq, to: trimMixer, format: nil)
+        engine.attach(player); engine.attach(timePitch); engine.attach(eq); engine.attach(trimMixer); engine.attach(channelMixer); engine.attach(cueMixer)
+        let fmt = engine.outputNode.outputFormat(forBus: 0)
+        engine.connect(player, to: timePitch, format: fmt)
+        engine.connect(timePitch, to: eq, format: fmt)
         engine.connect(trimMixer, to: channelMixer, format: nil)
         engine.connect(channelMixer, to: master, format: nil)
         engine.connect(cueMixer, to: master, format: nil)
